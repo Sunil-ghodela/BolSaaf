@@ -4,6 +4,9 @@ import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.NoiseSuppressor
+import android.os.Build
 import android.os.Process
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -19,6 +22,8 @@ class AudioRecorder(private val context: Context) {
     }
 
     private var audioRecord: AudioRecord? = null
+    private var noiseSuppressor: NoiseSuppressor? = null
+    private var automaticGainControl: AutomaticGainControl? = null
     private var isRecording = false
     private var recordingThread: Thread? = null
 
@@ -29,30 +34,73 @@ class AudioRecorder(private val context: Context) {
         maxOf(AudioRecord.getMinBufferSize(SAMPLE_RATE, channelConfig, audioFormat), FRAME_SIZE * 2 * 2)
     }
 
+    // Callbacks for processing
     private var onAudioDataCallback: ((ShortArray) -> Unit)? = null
-    private var onRecordingFinished: ((File) -> Unit)? = null
+    private var onRecordingFinished: ((File, File) -> Unit)? = null  // (originalFile, cleanedFile)
+
+    // AudioProcessor reference for RNNoise
+    private var audioProcessor: AudioProcessor? = null
 
     fun setCallbacks(
-        onData: ((ByteArray) -> Unit)? = null,
-        onFinished: ((File) -> Unit)? = null
+        onData: ((ShortArray) -> Unit)? = null,
+        onFinished: ((File, File) -> Unit)? = null
     ) {
         this.onAudioDataCallback = onData
         this.onRecordingFinished = onFinished
     }
 
-    fun startRecording(outputFile: File): Boolean {
+    fun setAudioProcessor(processor: AudioProcessor) {
+        this.audioProcessor = processor
+    }
+
+    fun startRecording(originalFile: File, cleanedFile: File): Boolean {
         if (isRecording) return false
 
-        audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            SAMPLE_RATE,
-            channelConfig,
-            audioFormat,
-            bufferSize
-        )
+        // Prefer raw mic without OEM AEC/NS so RNNoise has real noise to remove.
+        val sources = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                add(MediaRecorder.AudioSource.UNPROCESSED)
+            }
+            add(MediaRecorder.AudioSource.MIC)
+            add(MediaRecorder.AudioSource.DEFAULT)
+        }
+        var record: AudioRecord? = null
+        for (src in sources) {
+            val ar = AudioRecord(
+                src,
+                SAMPLE_RATE,
+                channelConfig,
+                audioFormat,
+                bufferSize
+            )
+            if (ar.state == AudioRecord.STATE_INITIALIZED) {
+                record = ar
+                break
+            }
+            ar.release()
+        }
+        audioRecord = record
 
-        if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+        if (audioRecord == null) {
             return false
+        }
+
+        audioRecord?.let { ar ->
+            if (NoiseSuppressor.isAvailable()) {
+                try {
+                    noiseSuppressor = NoiseSuppressor.create(ar.audioSessionId)?.also { it.enabled = true }
+                } catch (_: Exception) {
+                    noiseSuppressor = null
+                }
+            }
+            if (AutomaticGainControl.isAvailable()) {
+                try {
+                    /* Off: AGC fights RNNoise + pushes peaks toward 0 dBFS */
+                    automaticGainControl = AutomaticGainControl.create(ar.audioSessionId)?.also { it.enabled = false }
+                } catch (_: Exception) {
+                    automaticGainControl = null
+                }
+            }
         }
 
         isRecording = true
@@ -60,7 +108,7 @@ class AudioRecorder(private val context: Context) {
 
         recordingThread = Thread {
             Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
-            recordAudio(outputFile)
+            recordAudio(originalFile, cleanedFile)
         }.apply { start() }
 
         return true
@@ -68,35 +116,73 @@ class AudioRecorder(private val context: Context) {
 
     fun stopRecording() {
         isRecording = false
-        audioRecord?.stop()
-        audioRecord?.release()
+        try {
+            audioRecord?.stop()
+        } catch (_: Exception) {
+            // Already stopped or invalid state
+        }
+        // Wait for record loop to finish before release (avoid use-after-release crash)
+        try {
+            recordingThread?.join(5000)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+        recordingThread = null
+        try {
+            noiseSuppressor?.release()
+        } catch (_: Exception) {
+        }
+        noiseSuppressor = null
+        try {
+            automaticGainControl?.release()
+        } catch (_: Exception) {
+        }
+        automaticGainControl = null
+        try {
+            audioRecord?.release()
+        } catch (_: Exception) {
+        }
         audioRecord = null
     }
 
     fun isRecording(): Boolean = isRecording
 
-    private fun recordAudio(outputFile: File) {
-        val audioData = ByteArrayOutputStream()
+    private fun recordAudio(originalFile: File, cleanedFile: File) {
+        // Buffers for storing audio data
+        val originalAudioData = ByteArrayOutputStream()
+        val cleanedAudioData = ByteArrayOutputStream()
+        
         // RNNoise requires exactly 480 samples per frame
         val audioBuffer = ShortArray(FRAME_SIZE)
 
         while (isRecording) {
             val read = audioRecord?.read(audioBuffer, 0, FRAME_SIZE) ?: 0
             if (read == FRAME_SIZE) {
-                // Process through RNNoise callback
-                onAudioDataCallback?.invoke(audioBuffer.copyOf())
-                
-                // Write to output stream (convert shorts to bytes)
-                val byteBuffer = ByteBuffer.allocate(FRAME_SIZE * 2)
-                byteBuffer.order(ByteOrder.LITTLE_ENDIAN)
-                audioBuffer.forEach { byteBuffer.putShort(it) }
-                audioData.write(byteBuffer.array())
+                val staged = audioBuffer.copyOf()
+                val preset = audioProcessor?.cleaningPreset ?: CleaningPreset.NORMAL
+                AudioInputStage.apply(staged, preset)
+                originalAudioData.write(shortsToBytes(staged))
+
+                val cleaned = staged.copyOf()
+                audioProcessor?.processStagedFrame(cleaned)
+                cleanedAudioData.write(shortsToBytes(cleaned))
+
+                onAudioDataCallback?.invoke(cleaned)
             }
         }
 
-        // Save to WAV file
-        writeWavFile(audioData.toByteArray(), outputFile)
-        onRecordingFinished?.invoke(outputFile)
+        // Save both files
+        writeWavFile(originalAudioData.toByteArray(), originalFile)
+        writeWavFile(cleanedAudioData.toByteArray(), cleanedFile)
+        
+        onRecordingFinished?.invoke(originalFile, cleanedFile)
+    }
+
+    private fun shortsToBytes(shortArray: ShortArray): ByteArray {
+        val byteBuffer = ByteBuffer.allocate(shortArray.size * 2)
+        byteBuffer.order(ByteOrder.LITTLE_ENDIAN)
+        shortArray.forEach { byteBuffer.putShort(it) }
+        return byteBuffer.array()
     }
 
     private fun writeWavFile(pcmData: ByteArray, outputFile: File) {

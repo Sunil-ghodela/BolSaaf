@@ -1,0 +1,21 @@
+# Gradle / Android
+.gradle/
+**/build/
+.cxx/
+.externalNativeBuild/
+local.properties
+*.iml
+.idea/
+
+# Secrets & signing (never commit)
+.env
+keystore/
+*.jks
+*.keystore
+
+# Large / generated / local test data
+tmp_audio/
+/rnnoise/
+
+# OS
+.DS_Store

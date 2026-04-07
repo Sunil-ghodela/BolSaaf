@@ -2,7 +2,7 @@
 <data-extraction-rules>
     <cloud-backup>
         <include domain="sharedpref" path="."/>
-        <include domain="files" path="audio/"/>
+        <include domain="file" path="audio/"/>
         <exclude domain="sharedpref" path="device.xml"/>
     </cloud-backup>
 </data-extraction-rules>

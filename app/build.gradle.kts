@@ -2,6 +2,14 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
 }
+import java.util.Properties
+
+val envProps = Properties().apply {
+    val envFile = rootProject.file(".env")
+    if (envFile.exists()) {
+        envFile.inputStream().use { load(it) }
+    }
+}
 
 android {
     namespace = "com.bolsaaf"
@@ -27,9 +35,20 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            val keystorePath = envProps.getProperty("SIGNING_KEYSTORE", "keystore/bolsaaf-release.jks")
+            storeFile = rootProject.file(keystorePath)
+            storePassword = envProps.getProperty("SIGNING_STORE_PASSWORD")
+            keyAlias = envProps.getProperty("SIGNING_ALIAS")
+            keyPassword = envProps.getProperty("SIGNING_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
