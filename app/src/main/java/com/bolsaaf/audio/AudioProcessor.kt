@@ -24,6 +24,7 @@ class AudioProcessor(private val context: Context) {
     companion object {
         const val SAMPLE_RATE = 48000
         const val FRAME_SIZE = 480  // RNNoise frame size
+        const val WAV_HEADER_BYTES = 44
     }
 
     fun initialize(): Boolean {
@@ -52,6 +53,36 @@ class AudioProcessor(private val context: Context) {
             val pcmData = extractPcmData(inputUri)
             val cleanedData = processAudioBuffer(pcmData, progressCallback)
             writeWavFile(cleanedData, outputFile, SAMPLE_RATE, 1)
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /** Decode any supported audio URI and export as 48k mono WAV for cloud API. */
+    fun exportUriAsWav(inputUri: Uri, outputFile: File): Boolean {
+        return try {
+            val pcmData = extractPcmData(inputUri)
+            writeWavFile(pcmData, outputFile, SAMPLE_RATE, 1)
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Export URI as WAV and hard-cap the output size.
+     * If audio is longer than allowed, keeps the beginning segment only.
+     */
+    fun exportUriAsWavCapped(inputUri: Uri, outputFile: File, maxBytes: Int): Boolean {
+        return try {
+            val pcmData = extractPcmData(inputUri)
+            val maxPcmBytes = (maxBytes - WAV_HEADER_BYTES).coerceAtLeast(0)
+            val maxSamples = (maxPcmBytes / 2).coerceAtLeast(0)
+            val capped = if (pcmData.size > maxSamples) pcmData.copyOf(maxSamples) else pcmData
+            writeWavFile(capped, outputFile, SAMPLE_RATE, 1)
             true
         } catch (e: Exception) {
             e.printStackTrace()

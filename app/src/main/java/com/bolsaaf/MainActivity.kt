@@ -21,6 +21,7 @@ import com.bolsaaf.ui.screens.SaveInfo
 import com.bolsaaf.audio.AudioProcessor
 import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.audio.AudioRecorder
+import com.bolsaaf.audio.VoiceCleaningApi
 import com.bolsaaf.ui.screens.CleanItem
 import com.bolsaaf.ui.screens.HomeScreen
 import com.bolsaaf.ui.theme.BolSaafTheme
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var audioProcessor: AudioProcessor
     private lateinit var audioRecorder: AudioRecorder
+    private lateinit var voiceApi: VoiceCleaningApi
     private var tempRecordingFile: File? = null
     
     private var mediaPlayer: MediaPlayer? = null
@@ -80,6 +82,7 @@ class MainActivity : ComponentActivity() {
 
         audioProcessor = AudioProcessor(this)
         audioRecorder = AudioRecorder(this)
+        voiceApi = VoiceCleaningApi()
 
         checkPermissions()
 
@@ -590,15 +593,140 @@ class MainActivity : ComponentActivity() {
             processAudioFileWithResult(uri)
         }
     }
+
+    private fun cloudModeForPreset(preset: CleaningPreset): String {
+        return when (preset) {
+            CleaningPreset.NORMAL -> "standard"
+            CleaningPreset.STRONG -> "studio"
+            CleaningPreset.STUDIO -> "studio"
+        }
+    }
+
+    private data class CloudBatchPlan(
+        val inputWav: File,
+        val chunkFiles: List<File>
+    )
+
+    private fun intToLeBytes(v: Int): ByteArray {
+        return byteArrayOf(
+            (v and 0xff).toByte(),
+            ((v ushr 8) and 0xff).toByte(),
+            ((v ushr 16) and 0xff).toByte(),
+            ((v ushr 24) and 0xff).toByte()
+        )
+    }
+
+    private fun shortToLeBytes(v: Int): ByteArray {
+        return byteArrayOf((v and 0xff).toByte(), ((v ushr 8) and 0xff).toByte())
+    }
+
+    private fun writeMono48kWavFromPcm16(pcm: ByteArray, outFile: File) {
+        val sampleRate = 48000
+        val channels = 1
+        val bitsPerSample = 16
+        val byteRate = sampleRate * channels * (bitsPerSample / 8)
+        val blockAlign = channels * (bitsPerSample / 8)
+        val totalDataLen = pcm.size + 36
+        outFile.outputStream().use { out ->
+            out.write("RIFF".toByteArray())
+            out.write(intToLeBytes(totalDataLen))
+            out.write("WAVE".toByteArray())
+            out.write("fmt ".toByteArray())
+            out.write(intToLeBytes(16))
+            out.write(shortToLeBytes(1)) // PCM
+            out.write(shortToLeBytes(channels))
+            out.write(intToLeBytes(sampleRate))
+            out.write(intToLeBytes(byteRate))
+            out.write(shortToLeBytes(blockAlign))
+            out.write(shortToLeBytes(bitsPerSample))
+            out.write("data".toByteArray())
+            out.write(intToLeBytes(pcm.size))
+            out.write(pcm)
+        }
+    }
+
+    private fun readWavPcm16Data(file: File): ByteArray? {
+        if (!file.exists() || file.length() < 44) return null
+        val b = file.readBytes()
+        if (!(b[0] == 'R'.code.toByte() && b[1] == 'I'.code.toByte() && b[2] == 'F'.code.toByte() && b[3] == 'F'.code.toByte())) {
+            return null
+        }
+        var off = 12
+        while (off + 8 <= b.size) {
+            val id = String(b, off, 4, Charsets.US_ASCII)
+            val sz = (b[off + 4].toInt() and 0xff) or
+                ((b[off + 5].toInt() and 0xff) shl 8) or
+                ((b[off + 6].toInt() and 0xff) shl 16) or
+                ((b[off + 7].toInt() and 0xff) shl 24)
+            val dataStart = off + 8
+            if (id == "data") {
+                val end = (dataStart + sz).coerceAtMost(b.size)
+                return b.copyOfRange(dataStart, end)
+            }
+            off = dataStart + sz + (sz and 1)
+        }
+        return null
+    }
+
+    private fun prepareCloudBatchInputs(uri: Uri, outputDir: File, timestamp: String): CloudBatchPlan? {
+        val maxCloudBytes = 5 * 1024 * 1024
+        val maxPcmBytesPerChunk = (maxCloudBytes - 44).coerceAtLeast(1024)
+        val sourceWav = File(outputDir, "uploaded_${timestamp}_cloud_source.wav")
+        val exported = audioProcessor.exportUriAsWav(uri, sourceWav)
+        if (!exported || !sourceWav.exists()) return null
+        val pcm = readWavPcm16Data(sourceWav) ?: return null
+
+        if (sourceWav.length() <= maxCloudBytes.toLong()) {
+            return CloudBatchPlan(sourceWav, listOf(sourceWav))
+        }
+
+        val chunkFiles = ArrayList<File>()
+        var start = 0
+        var idx = 1
+        while (start < pcm.size) {
+            val endRaw = (start + maxPcmBytesPerChunk).coerceAtMost(pcm.size)
+            val end = if ((endRaw - start) % 2 == 0) endRaw else endRaw - 1
+            if (end <= start) break
+            val partPcm = pcm.copyOfRange(start, end)
+            val partFile = File(outputDir, "uploaded_${timestamp}_cloud_part%02d.wav".format(idx))
+            writeMono48kWavFromPcm16(partPcm, partFile)
+            chunkFiles.add(partFile)
+            start = end
+            idx++
+        }
+        if (chunkFiles.isEmpty()) return null
+        return CloudBatchPlan(sourceWav, chunkFiles)
+    }
+
+    private fun mergeCleanedWavChunks(cleanedChunks: List<File>, outputWav: File): Boolean {
+        return try {
+            if (cleanedChunks.isEmpty()) return false
+            if (cleanedChunks.size == 1) {
+                cleanedChunks.first().copyTo(outputWav, overwrite = true)
+                return true
+            }
+            val mergedPcm = ArrayList<ByteArray>()
+            var total = 0
+            for (f in cleanedChunks) {
+                val pcm = readWavPcm16Data(f) ?: return false
+                mergedPcm.add(pcm)
+                total += pcm.size
+            }
+            val all = ByteArray(total)
+            var p = 0
+            for (c in mergedPcm) {
+                c.copyInto(all, p)
+                p += c.size
+            }
+            writeMono48kWavFromPcm16(all, outputWav)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
     
     // Process audio file with result tracking
     private fun processAudioFileWithResult(uri: Uri) {
-        if (!audioProcessor.initialize()) {
-            Toast.makeText(this, "Failed to initialize audio processor", Toast.LENGTH_SHORT).show()
-            return
-        }
-        audioProcessor.cleaningPreset = cleaningPreset
-        
         val outputDir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "BolSaaf")
         if (!outputDir.exists()) outputDir.mkdirs()
         
@@ -609,33 +737,73 @@ class MainActivity : ComponentActivity() {
         Thread {
             try {
                 saveOriginalFromUri(uri, originalFile)
-                
                 isCleaning = true
-                val success = audioProcessor.cleanAudioFile(uri, cleanedFile) { progress ->
-                    runOnUiThread {
-                        // Update progress if needed
+
+                val batchPlan = prepareCloudBatchInputs(uri, outputDir, timestamp)
+                var success = false
+                var usedCloud = false
+                var cloudProcessingTimeSec: Float? = null
+                var cloudChunkCount = 0
+
+                if (batchPlan != null) {
+                    try {
+                        val cleanedParts = ArrayList<File>()
+                        var totalCloudSec = 0f
+                        var hasCloudSec = false
+                        batchPlan.chunkFiles.forEachIndexed { i, chunk ->
+                            val outPart = File(outputDir, "cleaned_${timestamp}_part%02d.wav".format(i + 1))
+                            val cloud = voiceApi.cleanAudio(
+                                inputWav = chunk,
+                                outputWav = outPart,
+                                mode = cloudModeForPreset(cleaningPreset)
+                            )
+                            if (cloud.processingTimeSec != null) {
+                                totalCloudSec += cloud.processingTimeSec
+                                hasCloudSec = true
+                            }
+                            cleanedParts.add(outPart)
+                        }
+                        success = mergeCleanedWavChunks(cleanedParts, cleanedFile)
+                        usedCloud = success
+                        cloudChunkCount = batchPlan.chunkFiles.size
+                        cloudProcessingTimeSec = if (hasCloudSec) totalCloudSec else null
+                    } catch (_: Exception) {
+                        success = false
                     }
                 }
-                
-                runOnUiThread {
+
+                if (!success) {
+                    if (!audioProcessor.initialize()) {
+                        throw IllegalStateException("Failed to initialize local cleaner")
+                    }
+                    audioProcessor.cleaningPreset = cleaningPreset
+                    success = audioProcessor.cleanAudioFile(uri, cleanedFile) { _ -> }
                     audioProcessor.destroy()
+                }
+
+                runOnUiThread {
                     isCleaning = false
                     selectedFileUri = null
                     
                     if (success) {
+                        val dSec = wavDurationSec(cleanedFile)
                         val pair = AudioPair(
                             timestamp = timestamp,
                             time = getCurrentTimeFormatted(),
                             originalFile = originalFile.name,
                             cleanedFile = cleanedFile.name,
                             isRecording = false,
-                            durationSec = wavDurationSec(cleanedFile)
+                            durationSec = dSec
                         )
                         currentProcessedPair = pair
                         addAudioPair(timestamp, originalFile, cleanedFile, isRecording = false)
                         showSuccess = true
-                        lastSaveInfo = SaveInfo(cleanedFile.name, wavDurationSec(cleanedFile), timestamp)
-                        Toast.makeText(this, "Cleaned · ${"%.1f".format(wavDurationSec(cleanedFile))}s", Toast.LENGTH_LONG).show()
+                        lastSaveInfo = SaveInfo(cleanedFile.name, dSec, timestamp)
+                        val engine = if (usedCloud) {
+                            val base = if (cloudProcessingTimeSec != null) "Cloud ${"%.1f".format(cloudProcessingTimeSec)}s" else "Cloud"
+                            if (cloudChunkCount > 1) "$base · ${cloudChunkCount} parts" else base
+                        } else "Local"
+                        Toast.makeText(this, "Cleaned ($engine) · ${"%.1f".format(dSec)}s", Toast.LENGTH_LONG).show()
                         window.decorView.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
                         Thread {
                             Thread.sleep(2800)
@@ -652,7 +820,6 @@ class MainActivity : ComponentActivity() {
                 e.printStackTrace()
                 runOnUiThread {
                     isCleaning = false
-                    audioProcessor.destroy()
                     Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
