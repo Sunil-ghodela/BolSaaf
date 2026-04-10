@@ -59,6 +59,9 @@
 #define NB_DELTA_CEPS 6
 
 #define NB_FEATURES (NB_BANDS+3*NB_DELTA_CEPS+2)
+#define INTERP_NOISE_THRESHOLD 0.32f
+#define INTERP_MIN_MIX 0.25f
+#define INTERP_MAX_MIX 0.85f
 
 
 #ifndef TRAINING
@@ -95,6 +98,12 @@ struct DenoiseState {
   float mem_hp_x[2];
   float lastg[NB_BANDS];
   RNNState rnn;
+  float prev_out[FRAME_SIZE];
+  float last_interpolation_strength;
+  float last_frame_noise_confidence;
+  float last_ensemble_score;
+  int has_prev_output;
+  int retrain_candidate;
 };
 
 static void compute_band_energy(float *bandE, const kiss_fft_cpx *X) {

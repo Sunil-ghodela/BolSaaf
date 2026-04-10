@@ -11,6 +11,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -32,8 +36,11 @@ fun HistoryScreen(
     onRemovePair: (String) -> Unit = {},
     onShareFile: (String) -> Unit = {},
     onDownloadFile: (String) -> Unit = {},
+    onSubmitFeedback: (AudioPair, Boolean, String?, String?, String?) -> Unit = { _, _, _, _, _ -> },
     onBack: () -> Unit = {}
 ) {
+    var feedbackPair by remember { mutableStateOf<AudioPair?>(null) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -82,11 +89,23 @@ fun HistoryScreen(
                         },
                         onRemove = { onRemovePair(pair.timestamp) },
                         onShare = { onShareFile(pair.cleanedFile) },
-                        onDownload = { onDownloadFile(pair.cleanedFile) }
+                        onDownload = { onDownloadFile(pair.cleanedFile) },
+                        onFeedback = { feedbackPair = pair }
                     )
                 }
             }
         }
+        feedbackPair?.let { pair ->
+            FeedbackDialog(
+                pair = pair,
+                onDismiss = { feedbackPair = null },
+                onSubmit = { clearVoice, issueType, issueTs, notes ->
+                    onSubmitFeedback(pair, clearVoice, issueType, issueTs, notes)
+                    feedbackPair = null
+                }
+            )
+        }
+
         BottomNavBar(
             modifier = Modifier.align(Alignment.BottomCenter),
             selectedTab = selectedTab,

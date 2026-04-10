@@ -4,6 +4,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -48,6 +49,7 @@ fun LiveScreen(
     audioPairs: List<AudioPair> = emptyList(),
     currentlyPlaying: String? = null,
     cleaningPreset: CleaningPreset = CleaningPreset.NORMAL,
+    modeAvailabilityNote: String? = null,
     onCleaningPresetChange: (CleaningPreset) -> Unit = {},
     onStartRecording: () -> Unit = {},
     onStopRecording: () -> Unit = {},
@@ -57,9 +59,11 @@ fun LiveScreen(
     onRemovePair: (String) -> Unit = {},
     onShareFile: (String) -> Unit = {},
     onDownloadFile: (String) -> Unit = {},
+    onSubmitFeedback: (AudioPair, Boolean, String?, String?, String?) -> Unit = { _, _, _, _, _ -> },
     onGoBack: () -> Unit = {}
 ) {
     val modes = listOf("Normal", "Strong", "Studio")
+    var feedbackPair by remember { mutableStateOf<AudioPair?>(null) }
     
     Box(
         modifier = Modifier
@@ -221,6 +225,14 @@ fun LiveScreen(
                 selectedIndex = cleaningPreset.ordinal,
                 onModeSelected = { onCleaningPresetChange(CleaningPreset.fromIndex(it)) }
             )
+            if (!modeAvailabilityNote.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = modeAvailabilityNote,
+                    fontSize = 12.sp,
+                    color = Color(0xFFFFA726)
+                )
+            }
             
             Spacer(modifier = Modifier.height(32.dp))
             
@@ -303,7 +315,8 @@ fun LiveScreen(
                         onPlayCleaned = { onPlayFile(pair.cleanedFile) },
                         onRemove = { onRemovePair(pair.timestamp) },
                         onShare = { onShareFile(pair.cleanedFile) },
-                        onDownload = { onDownloadFile(pair.cleanedFile) }
+                        onDownload = { onDownloadFile(pair.cleanedFile) },
+                        onFeedback = { feedbackPair = pair }
                     )
                 }
             }
@@ -362,6 +375,17 @@ fun LiveScreen(
             Spacer(modifier = Modifier.height(40.dp))
         }
         
+        feedbackPair?.let { pair ->
+            FeedbackDialog(
+                pair = pair,
+                onDismiss = { feedbackPair = null },
+                onSubmit = { clearVoice, issueType, issueTs, notes ->
+                    onSubmitFeedback(pair, clearVoice, issueType, issueTs, notes)
+                    feedbackPair = null
+                }
+            )
+        }
+
         // Bottom navigation bar
         BottomNavBar(
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -491,43 +515,47 @@ fun ModeSelector(
     selectedIndex: Int,
     onModeSelected: (Int) -> Unit
 ) {
+    val scroll = rememberScrollState()
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 32.dp),
+            .padding(horizontal = 24.dp),
         color = Color(0xFF1A2540),
         shape = RoundedCornerShape(30.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .horizontalScroll(scroll)
                 .padding(4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             modes.forEachIndexed { index, mode ->
                 val isSelected = index == selectedIndex
                 Box(
                     modifier = Modifier
-                        .weight(1f)
+                        .widthIn(min = 76.dp)
                         .clip(RoundedCornerShape(26.dp))
                         .background(
                             brush = if (isSelected) {
                                 Brush.horizontalGradient(
                                     colors = listOf(AccentGreen, AccentCyan.copy(alpha = 0.8f))
                                 )
-                            } else { 
+                            } else {
                                 Brush.horizontalGradient(colors = listOf(Color.Transparent, Color.Transparent))
                             },
                             shape = RoundedCornerShape(26.dp)
                         )
                         .clickable { onModeSelected(index) }
-                        .padding(vertical = 12.dp),
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         mode,
-                        fontSize = 14.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        fontSize = 13.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSelected) Color.Black else TextSecondary
                     )
                 }
@@ -637,7 +665,8 @@ fun LiveRecordingCard(
     onPlayCleaned: () -> Unit,
     onRemove: () -> Unit,
     onShare: () -> Unit,
-    onDownload: () -> Unit
+    onDownload: () -> Unit,
+    onFeedback: () -> Unit
 ) {
     val isOriginalPlaying = currentlyPlaying == pair.originalFile
     val isCleanedPlaying = currentlyPlaying == pair.cleanedFile
@@ -725,6 +754,11 @@ fun LiveRecordingCard(
                     icon = Icons.Filled.Info,
                     label = "Save",
                     onClick = onDownload
+                )
+                LiveActionButton(
+                    icon = Icons.Default.Person,
+                    label = "Feedback",
+                    onClick = onFeedback
                 )
             }
         }
