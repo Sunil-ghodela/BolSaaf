@@ -23,6 +23,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -35,7 +37,11 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.animation.AnimatedVisibility
@@ -50,9 +56,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bolsaaf.audio.AdaptiveAudioAnalyzer
 import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.audio.WavPreview
 import java.io.File
@@ -90,6 +98,26 @@ fun HomeScreen(
     selectedFileName: String? = null,
     selectedTab: Int = 0,
     cleaningPreset: CleaningPreset = CleaningPreset.NORMAL,
+    modeAvailabilityNote: String? = null,
+    processingModes: List<String> = listOf(
+        "Make Reel ★",
+        "Quick clean",
+        "Extract",
+        "BG mix",
+        "Video"
+    ),
+    selectedProcessingModeIndex: Int = 0,
+    onProcessingModeChange: (Int) -> Unit = {},
+    showBackgroundControls: Boolean = false,
+    backgroundLabels: List<String> = emptyList(),
+    selectedBackgroundIndex: Int = 0,
+    onBackgroundIndexChange: (Int) -> Unit = {},
+    bgMixVolume: Float = 0.15f,
+    onBgMixVolumeChange: (Float) -> Unit = {},
+    processPrimaryButtonLabel: String = "Clean Audio",
+    processHelperText: String = "Tap to remove noise and enhance your audio file.",
+    processingDialogTitle: String = "Cleaning Audio...",
+    processingDialogSubtitle: String = "AI is removing noise and enhancing your audio. Please wait...",
     onCleaningPresetChange: (CleaningPreset) -> Unit = {},
     onStartRecording: () -> Unit = {},
     onStopRecording: () -> Unit = {},
@@ -106,35 +134,14 @@ fun HomeScreen(
     onStopFile: () -> Unit = {},
     onRemovePair: (String) -> Unit = {},
     onShareFile: (String) -> Unit = {},
-    onDownloadFile: (String) -> Unit = {}
+    onDownloadFile: (String) -> Unit = {},
+    onSubmitFeedback: (AudioPair, Boolean, String?, String?, String?) -> Unit = { _, _, _, _, _ -> },
+    adaptiveProfile: AdaptiveAudioAnalyzer.Profile? = null,
+    adaptiveAnalysisLoading: Boolean = false,
+    onApplyAdaptivePreset: () -> Unit = {},
+    onProminentReelClick: () -> Unit = {}
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    
-    // Animated wave effect for recording state
-    val waveProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 2 * PI.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "wave"
-    )
-    
-    // Pulse effect for main button
-    // Keep record CTA layout stable while recording toggles.
-    val pulseScale = 1f
-    
-    // Rotating gradient animation
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(8000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
+    var feedbackPair by remember { mutableStateOf<AudioPair?>(null) }
     
     Box(
         modifier = Modifier
@@ -217,87 +224,105 @@ fun HomeScreen(
                     selectedIndex = cleaningPreset.ordinal,
                     onModeSelected = { onCleaningPresetChange(CleaningPreset.fromIndex(it)) }
                 )
+                if (!modeAvailabilityNote.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = modeAvailabilityNote,
+                        fontSize = 12.sp,
+                        color = Color(0xFFFFA726)
+                    )
+                }
+
+                if (showCleanButton && (adaptiveAnalysisLoading || adaptiveProfile != null)) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    SuggestedPresetChipRow(
+                        profile = adaptiveProfile,
+                        loading = adaptiveAnalysisLoading,
+                        currentPreset = cleaningPreset,
+                        onApply = onApplyAdaptivePreset,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                ModeSelector(
+                    modes = processingModes,
+                    selectedIndex = selectedProcessingModeIndex,
+                    onModeSelected = onProcessingModeChange
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onProminentReelClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFE65100),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text(
+                        text = "Make Reel — recommended",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                if (showBackgroundControls) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Background",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(horizontal = 32.dp)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    if (backgroundLabels.isNotEmpty()) {
+                        ModeSelector(
+                            modes = backgroundLabels,
+                            selectedIndex = selectedBackgroundIndex.coerceIn(0, backgroundLabels.lastIndex),
+                            onModeSelected = onBackgroundIndexChange
+                        )
+                    } else {
+                        Text(
+                            text = "Loading backgrounds…",
+                            fontSize = 12.sp,
+                            color = Color(0xFFFFA726),
+                            modifier = Modifier.padding(horizontal = 32.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Background volume  ${"%.0f".format(bgMixVolume * 100f)}%",
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(horizontal = 32.dp)
+                    )
+                    Slider(
+                        value = bgMixVolume,
+                        onValueChange = onBgMixVolumeChange,
+                        valueRange = 0.05f..0.45f,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Main recording button with glow effect
-                Box(
-                    modifier = Modifier.size(200.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Keep button visuals stable during record toggles (no expanding rings).
-                    
-                    // Main button with rotating gradient border
-                    Box(
-                        modifier = Modifier
-                            .size(180.dp)
-                            .scale(pulseScale)
-                            .clip(CircleShape)
-                            .background(
-                                brush = Brush.sweepGradient(
-                                    colors = listOf(
-                                        AccentGreen,
-                                        AccentCyan,
-                                        AccentPurple,
-                                        AccentGreen
-                                    ),
-                                    center = Offset(0.5f, 0.5f)
-                                )
-                            )
-                            .padding(4.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isRecording) 
-                                    Brush.radialGradient(
-                                        colors = listOf(AccentPurple, Color(0xFF7B1FA2))
-                                    )
-                                else 
-                                    Brush.radialGradient(
-                                        colors = listOf(BackgroundCard, BackgroundDark)
-                                    )
-                            )
-                            .clickable { 
-                                if (isRecording) onStopRecording() else onStartRecording()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        // Inner core (fixed size to prevent jump on click)
-                        Box(
-                            modifier = Modifier
-                                .size(140.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (isRecording)
-                                        AccentPurple.copy(alpha = 0.3f)
-                                    else
-                                        AccentGreen.copy(alpha = 0.2f)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = if (isRecording) Icons.Filled.Close else Icons.Filled.Add,
-                                    contentDescription = if (isRecording) "Stop" else "Record",
-                                    tint = if (isRecording) Color.White else AccentGreen,
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = if (isRecording) "Recording..." else "Tap to Clean",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = if (isRecording) "Noise clean ho rahi hai" else "Noise hatao, awaaz saaf karo",
-                                    fontSize = 11.sp,
-                                    color = TextSecondary
-                                )
-                            }
-                        }
+                HeroCleanPanel(
+                    isRecording = isRecording,
+                    cleaningPreset = cleaningPreset,
+                    helperText = if (isRecording) "Recording in progress" else "Tap to clean and polish",
+                    onCleanTap = {
+                        if (isRecording) onStopRecording() else onStartRecording()
                     }
-                }
-                
+                )
+
                 Spacer(modifier = Modifier.height(20.dp))
                 
                 // Recent cleans header
@@ -347,7 +372,8 @@ fun HomeScreen(
                     },
                     onRemove = { onRemovePair(pair.timestamp) },
                     onShare = { onShareFile(pair.cleanedFile) },
-                    onDownload = { onDownloadFile(pair.cleanedFile) }
+                    onDownload = { onDownloadFile(pair.cleanedFile) },
+                    onFeedback = { feedbackPair = pair }
                 )
             }
             
@@ -425,6 +451,12 @@ fun HomeScreen(
         if (showCleanButton && !isCleaning) {
             CleanFileDialog(
                 fileName = selectedFileName ?: "File",
+                primaryButtonLabel = processPrimaryButtonLabel,
+                helperText = processHelperText,
+                cleaningPreset = cleaningPreset,
+                adaptiveProfile = adaptiveProfile,
+                adaptiveAnalysisLoading = adaptiveAnalysisLoading,
+                onApplyAdaptivePreset = onApplyAdaptivePreset,
                 onClean = onCleanFile,
                 onCancel = onCancelUpload
             )
@@ -432,7 +464,21 @@ fun HomeScreen(
         
         // Processing Dialog
         if (isCleaning) {
-            ProcessingDialog()
+            ProcessingDialog(
+                title = processingDialogTitle,
+                message = processingDialogSubtitle
+            )
+        }
+
+        feedbackPair?.let { pair ->
+            FeedbackDialog(
+                pair = pair,
+                onDismiss = { feedbackPair = null },
+                onSubmit = { clearVoice, issueType, issueTs, notes ->
+                    onSubmitFeedback(pair, clearVoice, issueType, issueTs, notes)
+                    feedbackPair = null
+                }
+            )
         }
     }
 }
@@ -487,7 +533,7 @@ fun GlassmorphicHeader(
                     color = Color.White
                 )
                 Text(
-                    "AI Voice Cleaner",
+                    "Reel & voice studio",
                     fontSize = 12.sp,
                     color = Color(0xFFAAAAAA)
                 )
@@ -542,6 +588,135 @@ fun AnimatedTitle() {
             color = AccentGreen,
             textAlign = TextAlign.Center
         )
+    }
+}
+
+@Composable
+fun HeroCleanPanel(
+    isRecording: Boolean,
+    cleaningPreset: CleaningPreset,
+    helperText: String,
+    onCleanTap: () -> Unit
+) {
+    val panelGradient = Brush.linearGradient(
+        colors = listOf(AccentPurple, AccentGreen.copy(alpha = 0.6f)),
+        start = Offset.Zero,
+        end = Offset.Infinite
+    )
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .shadow(12.dp, RoundedCornerShape(24.dp)),
+        color = Color.Transparent
+    ) {
+        Box(
+            modifier = Modifier
+                .background(brush = panelGradient)
+                .clip(RoundedCornerShape(24.dp))
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(24.dp)
+                )
+                .padding(20.dp)
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Studio-grade clean",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White
+                    )
+                    Surface(
+                        color = Color.White.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = cleaningPreset.label,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "Low noise · balanced power · ready for reels",
+                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.9f)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(Color.White.copy(alpha = 0.9f), Color.White.copy(alpha = 0.2f))
+                            )
+                        )
+                        .clickable { onCleanTap() }
+                        .padding(vertical = 12.dp, horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isRecording) Icons.Filled.Close else Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.Black,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = if (isRecording) "Stop Recording" else "Tap to Clean",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                        Text(
+                            text = if (isRecording) "Your voice is being captured" else helperText,
+                            fontSize = 12.sp,
+                            color = Color.Black.copy(alpha = 0.6f)
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    Surface(
+                        modifier = Modifier,
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.Black.copy(alpha = 0.05f)
+                    ) {
+                        Text(
+                            text = "LIVE",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = helperText,
+                    fontSize = 12.sp,
+                    color = Color.White.copy(alpha = 0.9f)
+                )
+            }
+        }
     }
 }
 
@@ -761,7 +936,8 @@ fun ComparisonCard(
     onPlayCleaned: () -> Unit = {},
     onRemove: () -> Unit = {},
     onShare: () -> Unit = {},
-    onDownload: () -> Unit = {}
+    onDownload: () -> Unit = {},
+    onFeedback: () -> Unit = {}
 ) {
     val isOriginalPlaying = currentlyPlaying == pair.originalFile
     val isCleanedPlaying = currentlyPlaying == pair.cleanedFile
@@ -772,14 +948,14 @@ fun ComparisonCard(
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = BackgroundCard
+            containerColor = Color(0xFF111826)
         ),
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(18.dp)
         ) {
-            // Header with timestamp and remove button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -792,38 +968,38 @@ fun ComparisonCard(
                         fontWeight = FontWeight.Medium,
                         color = TextSecondary
                     )
-                    if (pair.durationSec > 0.1f) {
+                    if (pair.durationSec > 0f) {
                         Text(
-                            String.format(Locale.US, "%.1f s", pair.durationSec),
+                            text = String.format(Locale.US, "%.1f s", pair.durationSec),
                             fontSize = 12.sp,
-                            color = AccentGreen.copy(alpha = 0.85f)
+                            color = AccentGreen.copy(alpha = 0.9f)
                         )
                     }
                 }
-
-                // Remove button
-                IconButton(
-                    onClick = onRemove,
-                    modifier = Modifier.size(28.dp)
+                Surface(
+                    color = if (pair.isRecording) AccentPurple.copy(alpha = 0.2f) else BackgroundCard,
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = "Remove",
-                        tint = Color(0xFFEF5350),
-                        modifier = Modifier.size(20.dp)
+                    Text(
+                        text = if (pair.isRecording) "Live" else "Processed",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (pair.isRecording) AccentPurple else AccentGreen
                     )
                 }
             }
 
-            MiniWaveformStrip(cleanedPath, modifier = Modifier.fillMaxWidth())
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Side by side comparison
+            MiniWaveformStrip(cleanedPath, modifier = Modifier.fillMaxWidth())
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // ORIGINAL (Left side)
                 AudioSideBox(
                     modifier = Modifier.weight(1f),
                     title = "🎤 Original",
@@ -832,8 +1008,6 @@ fun ComparisonCard(
                     onPlay = onPlayOriginal,
                     borderColor = Color(0xFFFF9800).copy(alpha = 0.5f)
                 )
-                
-                // CLEANED (Right side)
                 AudioSideBox(
                     modifier = Modifier.weight(1f),
                     title = "✨ Cleaned",
@@ -843,27 +1017,32 @@ fun ComparisonCard(
                     borderColor = AccentGreen.copy(alpha = 0.5f)
                 )
             }
-            
-            // Action buttons for cleaned file
-            Spacer(modifier = Modifier.height(12.dp))
-            
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                ActionButton(
+                VoiceActionPill(
                     icon = Icons.AutoMirrored.Filled.Send,
                     label = "Share",
                     onClick = onShare
                 )
-                ActionButton(
-                    icon = Icons.Default.Info,
+                VoiceActionPill(
+                    icon = Icons.Filled.Download,
                     label = "Save",
                     onClick = onDownload
                 )
-                ActionButton(
+                VoiceActionPill(
+                    icon = Icons.Filled.Feedback,
+                    label = "Feedback",
+                    onClick = onFeedback
+                )
+                VoiceActionPill(
                     icon = Icons.Filled.Close,
                     label = "Delete",
+                    tint = Color(0xFFEF5350),
                     onClick = onRemove
                 )
             }
@@ -872,35 +1051,35 @@ fun ComparisonCard(
 }
 
 @Composable
-fun ActionButton(
+fun VoiceActionPill(
     icon: ImageVector,
     label: String,
+    tint: Color = AccentGreen,
     onClick: () -> Unit
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFF152033),
         modifier = Modifier.clickable { onClick() }
     ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(AccentGreen.copy(alpha = 0.2f)),
-            contentAlignment = Alignment.Center
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = AccentGreen,
-                modifier = Modifier.size(20.dp)
+                tint = tint,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = label,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White
             )
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            color = TextSecondary
-        )
     }
 }
 
@@ -1124,6 +1303,100 @@ data class AudioPair(
 )
 
 @Composable
+fun FeedbackDialog(
+    pair: AudioPair,
+    onDismiss: () -> Unit,
+    onSubmit: (Boolean, String?, String?, String?) -> Unit
+) {
+    val issueOptions = listOf("Quiet", "Artifacts", "Noise bacha", "Other")
+    var clearVoice by remember(pair.timestamp) { mutableStateOf(true) }
+    var issueType by remember(pair.timestamp) { mutableStateOf(issueOptions[0]) }
+    var issueTimestamp by remember(pair.timestamp) { mutableStateOf("") }
+    var notes by remember(pair.timestamp) { mutableStateOf("") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(containerColor = BackgroundCard),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Quick feedback", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    pair.cleanedFile,
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text("Voice clear hui?", color = TextSecondary, fontSize = 12.sp)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = clearVoice, onClick = { clearVoice = true }, label = { Text("Yes") })
+                    FilterChip(selected = !clearVoice, onClick = { clearVoice = false }, label = { Text("No") })
+                }
+
+                if (!clearVoice) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Issue type", color = TextSecondary, fontSize = 12.sp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        issueOptions.forEach { option ->
+                            FilterChip(
+                                selected = issueType == option,
+                                onClick = { issueType = option },
+                                label = { Text(option) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = issueTimestamp,
+                        onValueChange = { issueTimestamp = it },
+                        label = { Text("Issue timestamp (optional)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Notes (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            onSubmit(
+                                clearVoice,
+                                if (clearVoice) null else issueType,
+                                issueTimestamp,
+                                notes
+                            )
+                        }
+                    ) { Text("Send") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun UploadProgressDialog(
     progress: Int,
     fileName: String,
@@ -1219,8 +1492,88 @@ fun UploadProgressDialog(
 }
 
 @Composable
+fun SuggestedPresetChipRow(
+    profile: AdaptiveAudioAnalyzer.Profile?,
+    loading: Boolean,
+    currentPreset: CleaningPreset,
+    onApply: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = Color(0xFF1A2540),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            if (loading) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        color = AccentCyan,
+                        strokeWidth = 2.dp
+                    )
+                    Text(
+                        text = "Checking levels for preset hint…",
+                        fontSize = 12.sp,
+                        color = TextSecondary
+                    )
+                }
+            }
+            profile?.let { p ->
+                Text(
+                    text = p.uiHeadline(),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Cloud mode: ${p.suggestedCloudMode}",
+                            fontSize = 12.sp,
+                            color = AccentCyan
+                        )
+                        Text(
+                            text = p.flags.joinToString(", "),
+                            fontSize = 10.sp,
+                            color = Color(0xFFFFB74D),
+                            maxLines = 2
+                        )
+                    }
+                    if (currentPreset != p.suggestedCleaningPreset) {
+                        TextButton(onClick = onApply) {
+                            Text("Apply", color = AccentGreen, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Text(
+                            text = "✓ Current",
+                            fontSize = 12.sp,
+                            color = AccentGreen,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun CleanFileDialog(
     fileName: String,
+    primaryButtonLabel: String = "Clean Audio",
+    helperText: String = "Tap 'Clean Audio' to remove noise and enhance your audio file",
+    cleaningPreset: CleaningPreset = CleaningPreset.NORMAL,
+    adaptiveProfile: AdaptiveAudioAnalyzer.Profile? = null,
+    adaptiveAnalysisLoading: Boolean = false,
+    onApplyAdaptivePreset: () -> Unit = {},
     onClean: () -> Unit,
     onCancel: () -> Unit
 ) {
@@ -1277,11 +1630,22 @@ fun CleanFileDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
-                    "Tap 'Clean Audio' to remove noise and enhance your audio file",
+                    helperText,
                     fontSize = 12.sp,
                     color = TextSecondary,
                     textAlign = TextAlign.Center
                 )
+
+                if (adaptiveAnalysisLoading || adaptiveProfile != null) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    SuggestedPresetChipRow(
+                        profile = adaptiveProfile,
+                        loading = adaptiveAnalysisLoading,
+                        currentPreset = cleaningPreset,
+                        onApply = onApplyAdaptivePreset,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
@@ -1302,7 +1666,7 @@ fun CleanFileDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        "Clean Audio",
+                        primaryButtonLabel,
                         color = Color.Black,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
@@ -1328,7 +1692,10 @@ fun CleanFileDialog(
 }
 
 @Composable
-fun ProcessingDialog() {
+fun ProcessingDialog(
+    title: String = "Cleaning Audio...",
+    message: String = "AI is removing noise and enhancing your audio. Please wait..."
+) {
     Dialog(
         onDismissRequest = { },
         properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
@@ -1369,7 +1736,7 @@ fun ProcessingDialog() {
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 Text(
-                    "Cleaning Audio...",
+                    title,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -1378,7 +1745,7 @@ fun ProcessingDialog() {
                 Spacer(modifier = Modifier.height(12.dp))
                 
                 Text(
-                    "AI is removing noise and enhancing your audio. Please wait...",
+                    message,
                     fontSize = 14.sp,
                     color = TextSecondary,
                     textAlign = TextAlign.Center

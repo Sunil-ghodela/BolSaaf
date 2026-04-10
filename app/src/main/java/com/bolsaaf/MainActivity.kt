@@ -2,10 +2,13 @@ package com.bolsaaf
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -13,7 +16,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import com.bolsaaf.ui.screens.AudioPair
 import com.bolsaaf.ui.screens.HistoryScreen
 import com.bolsaaf.ui.screens.LiveScreen
@@ -21,21 +23,36 @@ import com.bolsaaf.ui.screens.SaveInfo
 import com.bolsaaf.audio.AudioProcessor
 import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.audio.AudioRecorder
+import com.bolsaaf.audio.VoiceApiPhase2Client
+import com.bolsaaf.audio.AdaptiveAudioAnalyzer
+import com.bolsaaf.audio.pcm16LeToShortArray
+import com.bolsaaf.audio.ProcessingQualityGuard
+import com.bolsaaf.audio.VoiceBackground
 import com.bolsaaf.audio.VoiceCleaningApi
 import com.bolsaaf.ui.screens.CleanItem
 import com.bolsaaf.ui.screens.HomeScreen
+import com.bolsaaf.ui.screens.ProfileScreen
 import com.bolsaaf.ui.theme.BolSaafTheme
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
+import org.json.JSONObject
+import kotlin.math.log10
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        private const val TAG = "MainActivity"
+    }
 
     private lateinit var audioProcessor: AudioProcessor
     private lateinit var audioRecorder: AudioRecorder
     private lateinit var voiceApi: VoiceCleaningApi
+    private lateinit var voiceApiPhase2: VoiceApiPhase2Client
     private var tempRecordingFile: File? = null
     
     private var mediaPlayer: MediaPlayer? = null
@@ -51,7 +68,19 @@ class MainActivity : ComponentActivity() {
     private var showSuccess by mutableStateOf(false)
     private var lastSaveInfo by mutableStateOf<SaveInfo?>(null)
     private var cleaningPreset by mutableStateOf(CleaningPreset.NORMAL)
+    private var processingFlow by mutableStateOf(ProcessingFlow.REEL_MODE)
     private var freeMinutesLeft by mutableIntStateOf(8)
+    /** Order matches Home flow chips: Reel first (product default). */
+    private enum class ProcessingFlow {
+        REEL_MODE, CLEAN, EXTRACT_VOICE, ADD_BACKGROUND, VIDEO_PROCESS
+    }
+
+    private var serverAvailableModes by mutableStateOf<Set<String>>(emptySet())
+    private var voiceBackgrounds by mutableStateOf<List<VoiceBackground>>(emptyList())
+    private var selectedBackgroundIndex by mutableIntStateOf(0)
+    private var bgMixVolume by mutableStateOf(0.15f)
+    private var lastAdaptiveProfile by mutableStateOf<AdaptiveAudioAnalyzer.Profile?>(null)
+    private var adaptiveAnalysisLoading by mutableStateOf(false)
 
     // Store audio pairs for comparison (timestamp -> AudioPair)
     private var audioPairsList = mutableStateListOf<AudioPair>()
@@ -64,14 +93,37 @@ class MainActivity : ComponentActivity() {
 
     private val pickAudioLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { 
-            selectedFileUri = it
-            isUploading = true
-            uploadProgress = 0
-            // Start upload simulation with progress
-            simulateUploadProgress(it)
+    ) { uri: Uri? -> uri?.let { handlePickedMediaUri(it) } }
+
+    private val pickVideoLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? -> uri?.let { handlePickedMediaUri(it) } }
+
+    private fun handlePickedMediaUri(uri: Uri) {
+        selectedFileUri = uri
+        lastAdaptiveProfile = null
+        adaptiveAnalysisLoading = false
+        isUploading = true
+        uploadProgress = 0
+        simulateUploadProgress(uri)
+    }
+
+    private fun openUploadPicker() {
+        when (processingFlow) {
+            ProcessingFlow.VIDEO_PROCESS -> pickVideoLauncher.launch("video/*")
+            else -> pickAudioLauncher.launch("audio/*")
         }
+    }
+
+    private fun milderCloudMode(current: String, available: Set<String>): String? {
+        val order = listOf("pro", "studio", "standard", "basic")
+        val idx = order.indexOf(current)
+        if (idx < 0 || idx >= order.lastIndex) return null
+        for (k in idx + 1 until order.size) {
+            val m = order[k]
+            if (available.isEmpty() || available.contains(m)) return m
+        }
+        return null
     }
 
     // Navigation state
@@ -83,6 +135,8 @@ class MainActivity : ComponentActivity() {
         audioProcessor = AudioProcessor(this)
         audioRecorder = AudioRecorder(this)
         voiceApi = VoiceCleaningApi()
+        voiceApiPhase2 = VoiceApiPhase2Client()
+        refreshVoiceApiCapabilities()
 
         checkPermissions()
 
@@ -102,10 +156,22 @@ class MainActivity : ComponentActivity() {
                         selectedFileName = selectedFileUri?.let { getFileName(it) },
                         selectedTab = selectedTab,
                         cleaningPreset = cleaningPreset,
+                        modeAvailabilityNote = cloudModeAvailabilityNote(),
+                        processingModes = listOf(
+                            "Reel ★",
+                            "Quick",
+                            "Extract",
+                            "BG",
+                            "Video"
+                        ),
+                        selectedProcessingModeIndex = processingFlow.ordinal,
+                        onProcessingModeChange = {
+                            processingFlow = ProcessingFlow.values()[it]
+                        },
                         onCleaningPresetChange = { cleaningPreset = it },
                         onStartRecording = { startRecording() },
                         onStopRecording = { stopRecording() },
-                        onUploadFile = { pickAudioLauncher.launch("audio/*") },
+                        onUploadFile = { openUploadPicker() },
                         onCleanFile = { startCleaningProcess() },
                         onCancelUpload = { cancelUpload() },
                         onGoToHistory = { selectedTab = 2 },
@@ -118,7 +184,27 @@ class MainActivity : ComponentActivity() {
                         onStopFile = { stopPlayback() },
                         onRemovePair = { timestamp -> removeAudioPair(timestamp) },
                         onShareFile = { fileName -> shareFile(fileName) },
-                        onDownloadFile = { fileName -> downloadFile(fileName) }
+                        onDownloadFile = { fileName -> downloadFile(fileName) },
+                        onSubmitFeedback = { pair, clearVoice, issueType, issueTs, notes ->
+                            submitUserFeedback(pair, clearVoice, issueType, issueTs, notes)
+                        },
+                        showBackgroundControls = processingFlow == ProcessingFlow.ADD_BACKGROUND ||
+                            processingFlow == ProcessingFlow.REEL_MODE,
+                        backgroundLabels = voiceBackgrounds.map { b -> b.label.ifBlank { b.id } },
+                        selectedBackgroundIndex = selectedBackgroundIndex,
+                        onBackgroundIndexChange = { selectedBackgroundIndex = it },
+                        bgMixVolume = bgMixVolume,
+                        onBgMixVolumeChange = { bgMixVolume = it },
+                        processPrimaryButtonLabel = processPrimaryButtonLabel(),
+                        processHelperText = processHelperText(),
+                        processingDialogTitle = processingDialogTitle(),
+                        processingDialogSubtitle = processingDialogSubtitle(),
+                        adaptiveProfile = lastAdaptiveProfile,
+                        adaptiveAnalysisLoading = adaptiveAnalysisLoading,
+                        onApplyAdaptivePreset = {
+                            lastAdaptiveProfile?.let { cleaningPreset = it.suggestedCleaningPreset }
+                        },
+                        onProminentReelClick = { processingFlow = ProcessingFlow.REEL_MODE }
                     )
                     1 -> LiveScreen(
                         isRecording = isRecording,
@@ -128,6 +214,7 @@ class MainActivity : ComponentActivity() {
                         audioPairs = getAudioPairs(),
                         currentlyPlaying = currentlyPlayingFile,
                         cleaningPreset = cleaningPreset,
+                        modeAvailabilityNote = cloudModeAvailabilityNote(),
                         onCleaningPresetChange = { cleaningPreset = it },
                         onStartRecording = { startRecording() },
                         onStopRecording = { stopRecording() },
@@ -137,6 +224,9 @@ class MainActivity : ComponentActivity() {
                         onRemovePair = { timestamp -> removeAudioPair(timestamp) },
                         onShareFile = { fileName -> shareFile(fileName) },
                         onDownloadFile = { fileName -> downloadFile(fileName) },
+                        onSubmitFeedback = { pair, clearVoice, issueType, issueTs, notes ->
+                            submitUserFeedback(pair, clearVoice, issueType, issueTs, notes)
+                        },
                         onGoBack = { selectedTab = 0 }
                     )
                     2 -> HistoryScreen(
@@ -150,7 +240,20 @@ class MainActivity : ComponentActivity() {
                         onRemovePair = { timestamp -> removeAudioPair(timestamp) },
                         onShareFile = { fileName -> shareFile(fileName) },
                         onDownloadFile = { fileName -> downloadFile(fileName) },
+                        onSubmitFeedback = { pair, clearVoice, issueType, issueTs, notes ->
+                            submitUserFeedback(pair, clearVoice, issueType, issueTs, notes)
+                        },
                         onBack = { selectedTab = 0 }
+                    )
+                    3 -> ProfileScreen(
+                        selectedTab = selectedTab,
+                        onTabSelected = { tab -> selectedTab = tab },
+                        cleaningPreset = cleaningPreset,
+                        freeMinutesLeft = freeMinutesLeft,
+                        completedCleans = getAudioPairs().size,
+                        onUpgrade = {
+                            Toast.makeText(this, "Upgrade flow coming soon", Toast.LENGTH_SHORT).show()
+                        }
                     )
                     else -> HomeScreen(
                         recordingsDir = recDir,
@@ -164,10 +267,22 @@ class MainActivity : ComponentActivity() {
                         selectedFileName = selectedFileUri?.let { getFileName(it) },
                         selectedTab = selectedTab,
                         cleaningPreset = cleaningPreset,
+                        modeAvailabilityNote = cloudModeAvailabilityNote(),
+                        processingModes = listOf(
+                            "Reel ★",
+                            "Quick",
+                            "Extract",
+                            "BG",
+                            "Video"
+                        ),
+                        selectedProcessingModeIndex = processingFlow.ordinal,
+                        onProcessingModeChange = {
+                            processingFlow = ProcessingFlow.values()[it]
+                        },
                         onCleaningPresetChange = { cleaningPreset = it },
                         onStartRecording = { startRecording() },
                         onStopRecording = { stopRecording() },
-                        onUploadFile = { pickAudioLauncher.launch("audio/*") },
+                        onUploadFile = { openUploadPicker() },
                         onCleanFile = { startCleaningProcess() },
                         onCancelUpload = { cancelUpload() },
                         onGoToHistory = { selectedTab = 2 },
@@ -180,7 +295,27 @@ class MainActivity : ComponentActivity() {
                         onStopFile = { stopPlayback() },
                         onRemovePair = { timestamp -> removeAudioPair(timestamp) },
                         onShareFile = { fileName -> shareFile(fileName) },
-                        onDownloadFile = { fileName -> downloadFile(fileName) }
+                        onDownloadFile = { fileName -> downloadFile(fileName) },
+                        onSubmitFeedback = { pair, clearVoice, issueType, issueTs, notes ->
+                            submitUserFeedback(pair, clearVoice, issueType, issueTs, notes)
+                        },
+                        showBackgroundControls = processingFlow == ProcessingFlow.ADD_BACKGROUND ||
+                            processingFlow == ProcessingFlow.REEL_MODE,
+                        backgroundLabels = voiceBackgrounds.map { b -> b.label.ifBlank { b.id } },
+                        selectedBackgroundIndex = selectedBackgroundIndex,
+                        onBackgroundIndexChange = { selectedBackgroundIndex = it },
+                        bgMixVolume = bgMixVolume,
+                        onBgMixVolumeChange = { bgMixVolume = it },
+                        processPrimaryButtonLabel = processPrimaryButtonLabel(),
+                        processHelperText = processHelperText(),
+                        processingDialogTitle = processingDialogTitle(),
+                        processingDialogSubtitle = processingDialogSubtitle(),
+                        adaptiveProfile = lastAdaptiveProfile,
+                        adaptiveAnalysisLoading = adaptiveAnalysisLoading,
+                        onApplyAdaptivePreset = {
+                            lastAdaptiveProfile?.let { cleaningPreset = it.suggestedCleaningPreset }
+                        },
+                        onProminentReelClick = { processingFlow = ProcessingFlow.REEL_MODE }
                     )
                 }
             }
@@ -465,6 +600,8 @@ class MainActivity : ComponentActivity() {
                 mime.contains("mp4", ignoreCase = true) || mime.contains("m4a", ignoreCase = true) || mime.contains("aac", ignoreCase = true) -> return ".m4a"
                 mime.contains("ogg", ignoreCase = true) -> return ".ogg"
                 mime.contains("flac", ignoreCase = true) -> return ".flac"
+                mime.contains("video", ignoreCase = true) && mime.contains("mp4", ignoreCase = true) -> return ".mp4"
+                mime.startsWith("video/", ignoreCase = true) -> return ".mp4"
                 else -> { }
             }
         }
@@ -483,6 +620,24 @@ class MainActivity : ComponentActivity() {
         return (pcmBytes / 2) / 48000f
     }
 
+    private fun mediaDurationSec(file: File): Float {
+        if (!file.exists()) return 0f
+        if (file.name.endsWith(".wav", ignoreCase = true)) return wavDurationSec(file)
+        val r = MediaMetadataRetriever()
+        return try {
+            r.setDataSource(file.absolutePath)
+            val ms = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            ms / 1000f
+        } catch (_: Exception) {
+            0f
+        } finally {
+            try {
+                r.release()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     // Add audio pair (Original + Cleaned together)
     private fun addAudioPair(timestamp: String, originalFile: File, cleanedFile: File, isRecording: Boolean = true) {
         val time = getCurrentTimeFormatted()
@@ -492,7 +647,7 @@ class MainActivity : ComponentActivity() {
             originalFile = originalFile.name,
             cleanedFile = cleanedFile.name,
             isRecording = isRecording,
-            durationSec = wavDurationSec(cleanedFile)
+            durationSec = mediaDurationSec(cleanedFile)
         )
         // Remove any existing pair with same timestamp
         audioPairsList.removeAll { it.timestamp == timestamp }
@@ -566,12 +721,68 @@ class MainActivity : ComponentActivity() {
                 runOnUiThread {
                     isUploading = false
                     showCleanButton = true
-                    Toast.makeText(this, "File uploaded! Tap Clean to process", Toast.LENGTH_SHORT).show()
+                    lastAdaptiveProfile = null
+                    adaptiveAnalysisLoading = true
+                    Toast.makeText(
+                        this,
+                        "File ready — tap ${primaryProcessActionShortLabel()} in the dialog",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
+                analyzeAdaptiveHint(uri)
             } catch (e: Exception) {
                 runOnUiThread {
                     isUploading = false
+                    adaptiveAnalysisLoading = false
                     Toast.makeText(this, "Upload failed", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun analyzeAdaptiveHint(uri: Uri) {
+        Thread {
+            try {
+                val tmp = File(cacheDir, "adaptive_preview.wav")
+                val capBytes = 48000 * 2 * 30 + 44
+                if (!audioProcessor.exportUriAsWavCapped(uri, tmp, capBytes)) {
+                    runOnUiThread {
+                        lastAdaptiveProfile = null
+                        adaptiveAnalysisLoading = false
+                    }
+                    return@Thread
+                }
+                val pcm = readWavPcm16Data(tmp)
+                try {
+                    tmp.delete()
+                } catch (_: Exception) {
+                }
+                if (pcm == null) {
+                    runOnUiThread {
+                        lastAdaptiveProfile = null
+                        adaptiveAnalysisLoading = false
+                    }
+                    return@Thread
+                }
+                val profile = AdaptiveAudioAnalyzer.analyze(pcm.pcm16LeToShortArray(), 48000)
+                runOnUiThread {
+                    lastAdaptiveProfile = profile
+                    adaptiveAnalysisLoading = false
+                    if (cleaningPreset == CleaningPreset.NORMAL &&
+                        profile.suggestedCleaningPreset != CleaningPreset.NORMAL
+                    ) {
+                        cleaningPreset = profile.suggestedCleaningPreset
+                        Toast.makeText(
+                            this,
+                            "Preset → ${profile.suggestedCleaningPreset.label} (suggested)",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            } catch (_: Exception) {
+                runOnUiThread {
+                    lastAdaptiveProfile = null
+                    adaptiveAnalysisLoading = false
                 }
             }
         }.start()
@@ -583,6 +794,8 @@ class MainActivity : ComponentActivity() {
         isUploading = false
         uploadProgress = 0
         showCleanButton = false
+        lastAdaptiveProfile = null
+        adaptiveAnalysisLoading = false
         Toast.makeText(this, "Upload cancelled", Toast.LENGTH_SHORT).show()
     }
     
@@ -590,7 +803,147 @@ class MainActivity : ComponentActivity() {
     private fun startCleaningProcess() {
         selectedFileUri?.let { uri ->
             showCleanButton = false
-            processAudioFileWithResult(uri)
+            if (processingFlow == ProcessingFlow.CLEAN) {
+                processAudioFileWithResult(uri)
+            } else {
+                processAudioFileWithPhase2Flow(uri)
+            }
+        }
+    }
+
+    private fun processAudioFileWithPhase2Flow(uri: Uri) {
+        val outputDir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "BolSaaf")
+        if (!outputDir.exists()) outputDir.mkdirs()
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val originalFile = File(outputDir, "uploaded_$timestamp${guessExtensionForUri(uri)}")
+        val flowSnapshot = processingFlow
+        val bgIdSnapshot = selectedBackgroundId()
+        val bgVolSnapshot = bgMixVolume.coerceIn(0.02f, 0.5f)
+        val outFile = if (flowSnapshot == ProcessingFlow.VIDEO_PROCESS) {
+            File(outputDir, "cleaned_$timestamp.mp4")
+        } else {
+            File(outputDir, "cleaned_$timestamp.wav")
+        }
+
+        Thread {
+            try {
+                saveOriginalFromUri(uri, originalFile)
+                isCleaning = true
+                val mode = modeForPhase2Flow(flowSnapshot, cleaningPreset)
+                val accepted = when (flowSnapshot) {
+                    ProcessingFlow.EXTRACT_VOICE -> voiceApiPhase2.extractVoice(originalFile, mode = mode)
+                    ProcessingFlow.ADD_BACKGROUND -> voiceApiPhase2.addBackground(
+                        originalFile,
+                        backgroundId = bgIdSnapshot,
+                        bgVolume = bgVolSnapshot,
+                        mode = mode
+                    )
+                    ProcessingFlow.REEL_MODE -> voiceApiPhase2.reelMode(
+                        originalFile,
+                        mode = mode,
+                        backgroundId = bgIdSnapshot,
+                        bgVolume = bgVolSnapshot
+                    )
+                    ProcessingFlow.VIDEO_PROCESS -> voiceApiPhase2.processVideo(originalFile, mode = mode)
+                    ProcessingFlow.CLEAN -> throw IllegalStateException("Invalid phase2 flow: CLEAN")
+                }
+                var status = voiceApiPhase2.getStatus(accepted.jobId)
+                var attempts = 0
+                val maxAttempts = if (flowSnapshot == ProcessingFlow.VIDEO_PROCESS) 120 else 80
+                while (status.status !in setOf("completed", "failed") && attempts < maxAttempts) {
+                    Thread.sleep(1500)
+                    status = voiceApiPhase2.getStatus(accepted.jobId)
+                    attempts++
+                }
+                if (status.status != "completed") {
+                    throw IllegalStateException(status.errorMessage ?: "Processing failed")
+                }
+                val outputUrl = when (flowSnapshot) {
+                    ProcessingFlow.VIDEO_PROCESS ->
+                        status.outputVideoUrl ?: status.outputAudioUrl ?: status.cleanedUrl
+                    else -> status.outputAudioUrl ?: status.cleanedUrl
+                } ?: throw IllegalStateException("No output url in completed job")
+                downloadFromUrl(outputUrl, outFile)
+                if (flowSnapshot == ProcessingFlow.EXTRACT_VOICE &&
+                    outFile.extension.equals("wav", ignoreCase = true)
+                ) {
+                    try {
+                        tuneExtractOutput(uri, outFile, outputDir, timestamp)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Extract tuning skipped: ${e.message}")
+                    }
+                }
+                val dSec = mediaDurationSec(outFile)
+                runOnUiThread {
+                    isCleaning = false
+                    selectedFileUri = null
+                    lastAdaptiveProfile = null
+                    adaptiveAnalysisLoading = false
+                    val pair = AudioPair(
+                        timestamp = timestamp,
+                        time = getCurrentTimeFormatted(),
+                        originalFile = originalFile.name,
+                        cleanedFile = outFile.name,
+                        isRecording = false,
+                        durationSec = dSec
+                    )
+                    currentProcessedPair = pair
+                    addAudioPair(timestamp, originalFile, outFile, isRecording = false)
+                    showSuccess = true
+                    lastSaveInfo = SaveInfo(outFile.name, dSec, timestamp)
+                    Toast.makeText(this, "Done (${flowSnapshot.name}) · ${"%.1f".format(dSec)}s", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "processAudioFileWithPhase2Flow failed: ${e.message}", e)
+                runOnUiThread {
+                    isCleaning = false
+                    Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun tuneExtractOutput(uri: Uri, cleanedWav: File, outputDir: File, timestamp: String) {
+        val refWav = File(outputDir, "uploaded_${timestamp}_extract_ref.wav")
+        val exported = audioProcessor.exportUriAsWav(uri, refWav)
+        if (!exported || !refWav.exists()) return
+        try {
+            val oPcm = readWavPcm16Data(refWav) ?: return
+            val cPcm = readWavPcm16Data(cleanedWav) ?: return
+            val q = ProcessingQualityGuard.compare(oPcm.pcm16LeToShortArray(), cPcm.pcm16LeToShortArray())
+            if (!q.pass) {
+                val issues = q.issues
+                val needDry = issues.any {
+                    it == "hollow_risk_zero" || it == "peak_collapsed" || it == "heavy_rms_drop"
+                }
+                if (needDry) {
+                    val dry = if ("heavy_rms_drop" in issues) 0.14f else 0.09f
+                    applyDryMixFromOriginal(refWav, cleanedWav, dry)
+                }
+                if ("output_very_quiet" in issues) {
+                    applyMinLoudnessFloor(cleanedWav, minRmsDbfs = -39f, maxBoostDb = 16f)
+                }
+                Log.i(TAG, "Extract tuning applied issues=$issues")
+            }
+        } finally {
+            try {
+                refWav.delete()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private fun downloadFromUrl(url: String, outputFile: File) {
+        val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.connectTimeout = 30000
+        conn.readTimeout = 120000
+        val code = conn.responseCode
+        if (code !in 200..299) {
+            throw IllegalStateException("Download failed HTTP $code")
+        }
+        conn.inputStream.use { input ->
+            outputFile.outputStream().use { out -> input.copyTo(out) }
         }
     }
 
@@ -598,9 +951,119 @@ class MainActivity : ComponentActivity() {
         return when (preset) {
             CleaningPreset.NORMAL -> "standard"
             CleaningPreset.STRONG -> "studio"
-            CleaningPreset.STUDIO -> "studio"
+            CleaningPreset.STUDIO -> "pro"
         }
     }
+
+    private fun cloudModeForPresetWithFallback(preset: CleaningPreset): String {
+        val preferred = cloudModeForPreset(preset)
+        val available = serverAvailableModes
+        if (available.isEmpty()) return preferred
+        return if (available.contains(preferred)) {
+            preferred
+        } else if (available.contains("standard")) {
+            "standard"
+        } else if (available.contains("basic")) {
+            "basic"
+        } else {
+            preferred
+        }
+    }
+
+    private fun modeForPhase2Flow(flow: ProcessingFlow, preset: CleaningPreset): String {
+        val preferred = cloudModeForPresetWithFallback(preset)
+        if (flow != ProcessingFlow.EXTRACT_VOICE) return preferred
+        // Extract path sounds more natural with a milder mode.
+        return when {
+            preferred == "pro" || preferred == "studio" -> {
+                if (serverAvailableModes.contains("standard")) "standard" else preferred
+            }
+            else -> preferred
+        }
+    }
+
+    private fun cloudModeAvailabilityNote(): String? {
+        val available = serverAvailableModes
+        if (available.isEmpty()) return null
+        val missingStudio = !available.contains("studio")
+        val missingPro = !available.contains("pro")
+        return if (missingStudio || missingPro) {
+            "Studio/Pro unavailable on server right now. App will use Standard mode."
+        } else {
+            null
+        }
+    }
+
+    private fun refreshVoiceApiCapabilities() {
+        Thread {
+            try {
+                val health = voiceApi.getHealth()
+                val backgrounds = try {
+                    voiceApiPhase2.getBackgrounds()
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                runOnUiThread {
+                    serverAvailableModes = health.availableModes
+                    voiceBackgrounds = if (backgrounds.isNotEmpty()) {
+                        backgrounds
+                    } else {
+                        listOf(VoiceBackground("rain", "Rain", null, 0.15f))
+                    }
+                    selectedBackgroundIndex =
+                        selectedBackgroundIndex.coerceIn(0, (voiceBackgrounds.size - 1).coerceAtLeast(0))
+                }
+            } catch (_: Exception) {
+                runOnUiThread {
+                    if (voiceBackgrounds.isEmpty()) {
+                        voiceBackgrounds = listOf(VoiceBackground("rain", "Rain", null, 0.15f))
+                    }
+                }
+            }
+        }.start()
+    }
+
+    private fun primaryProcessActionShortLabel(): String =
+        when (processingFlow) {
+            ProcessingFlow.REEL_MODE -> "Make Reel"
+            ProcessingFlow.CLEAN -> "Quick clean"
+            ProcessingFlow.VIDEO_PROCESS -> "Process video"
+            else -> "Start"
+        }
+
+    private fun selectedBackgroundId(): String =
+        voiceBackgrounds.getOrNull(selectedBackgroundIndex.coerceIn(0, voiceBackgrounds.lastIndex.coerceAtLeast(0)))
+            ?.id?.takeIf { it.isNotBlank() } ?: "rain"
+
+    private fun processPrimaryButtonLabel(): String =
+        when (processingFlow) {
+            ProcessingFlow.CLEAN -> "Clean Audio"
+            ProcessingFlow.VIDEO_PROCESS -> "Process Video"
+            ProcessingFlow.EXTRACT_VOICE -> "Extract Voice"
+            ProcessingFlow.ADD_BACKGROUND -> "Mix Background"
+            ProcessingFlow.REEL_MODE -> "Make Reel"
+        }
+
+    private fun processHelperText(): String =
+        when (processingFlow) {
+            ProcessingFlow.CLEAN -> "Noise reduce + enhance (cloud or local)."
+            ProcessingFlow.VIDEO_PROCESS -> "Clean the audio track and remux to video (server job)."
+            ProcessingFlow.EXTRACT_VOICE -> "Demucs-style vocal separation (async job)."
+            ProcessingFlow.ADD_BACKGROUND -> "Mix voice with the background you selected below."
+            ProcessingFlow.REEL_MODE -> "Reel pipeline: clean → optional background (server) → loudness. Export when server adds video step."
+        }
+
+    private fun processingDialogTitle(): String =
+        when (processingFlow) {
+            ProcessingFlow.VIDEO_PROCESS -> "Processing Video…"
+            else -> "Processing…"
+        }
+
+    private fun processingDialogSubtitle(): String =
+        when (processingFlow) {
+            ProcessingFlow.VIDEO_PROCESS -> "Server is cleaning the audio track and rebuilding the file."
+            else -> "Server job running — please wait…"
+        }
 
     private data class CloudBatchPlan(
         val inputWav: File,
@@ -666,6 +1129,63 @@ class MainActivity : ComponentActivity() {
             off = dataStart + sz + (sz and 1)
         }
         return null
+    }
+
+
+    private fun pcmRmsDbfs(pcm: ByteArray): Float {
+        if (pcm.size < 2) return -120f
+        val s = pcm.pcm16LeToShortArray()
+        if (s.isEmpty()) return -120f
+        var sum = 0.0
+        for (v in s) {
+            val x = v.toDouble()
+            sum += x * x
+        }
+        val rms = sqrt(sum / s.size).toFloat()
+        if (rms <= 1e-9f) return -120f
+        return (20f * log10(rms / 32768f)).coerceIn(-120f, 0f)
+    }
+
+    private fun applyMinLoudnessFloor(wavFile: File, minRmsDbfs: Float = -42f, maxBoostDb: Float = 18f): Boolean {
+        val pcm = readWavPcm16Data(wavFile) ?: return false
+        val currentDb = pcmRmsDbfs(pcm)
+        if (currentDb >= minRmsDbfs) return false
+        val neededDb = (minRmsDbfs - currentDb).coerceAtMost(maxBoostDb)
+        val gain = 10f.pow(neededDb / 20f)
+        val inShort = pcm.pcm16LeToShortArray()
+        if (inShort.isEmpty()) return false
+        val out = ByteArray(inShort.size * 2)
+        var p = 0
+        for (v in inShort) {
+            val y = (v * gain).toInt().coerceIn(-32768, 32767)
+            out[p++] = (y and 0xff).toByte()
+            out[p++] = ((y ushr 8) and 0xff).toByte()
+        }
+        writeMono48kWavFromPcm16(out, wavFile)
+        Log.i(TAG, "Applied loudness floor min=${minRmsDbfs}dBFS gain=${"%.1f".format(neededDb)}dB")
+        return true
+    }
+
+    private fun applyDryMixFromOriginal(originalWav: File, cleanedWav: File, dryMix: Float): Boolean {
+        if (dryMix <= 0f) return false
+        val oPcm = readWavPcm16Data(originalWav) ?: return false
+        val cPcm = readWavPcm16Data(cleanedWav) ?: return false
+        val o = oPcm.pcm16LeToShortArray()
+        val c = cPcm.pcm16LeToShortArray()
+        val n = minOf(o.size, c.size)
+        if (n <= 0) return false
+        val dry = dryMix.coerceIn(0f, 0.4f)
+        val wet = 1f - dry
+        val out = ByteArray(n * 2)
+        var p = 0
+        for (i in 0 until n) {
+            val y = (c[i] * wet + o[i] * dry).toInt().coerceIn(-32768, 32767)
+            out[p++] = (y and 0xff).toByte()
+            out[p++] = ((y ushr 8) and 0xff).toByte()
+        }
+        writeMono48kWavFromPcm16(out, cleanedWav)
+        Log.i(TAG, "Applied dry mix=${"%.2f".format(dry)}")
+        return true
     }
 
     private fun prepareCloudBatchInputs(uri: Uri, outputDir: File, timestamp: String): CloudBatchPlan? {
@@ -736,6 +1256,7 @@ class MainActivity : ComponentActivity() {
         
         Thread {
             try {
+                val modesSnap = serverAvailableModes.toSet()
                 saveOriginalFromUri(uri, originalFile)
                 isCleaning = true
 
@@ -745,38 +1266,166 @@ class MainActivity : ComponentActivity() {
                 var cloudProcessingTimeSec: Float? = null
                 var cloudChunkCount = 0
 
+                var runtimeAdaptiveProfile: AdaptiveAudioAnalyzer.Profile? = null
+                batchPlan?.let { plan ->
+                    readWavPcm16Data(plan.inputWav)?.let { pcmBytes ->
+                        try {
+                            val profile = AdaptiveAudioAnalyzer.analyze(pcmBytes.pcm16LeToShortArray(), 48000)
+                            runtimeAdaptiveProfile = profile
+                            Log.i(
+                                TAG,
+                                "Adaptive preset applied: mode=${profile.adaptivePreset.mode} " +
+                                    "denoise=${profile.adaptivePreset.denoiseLevel} " +
+                                    "compressor=${profile.adaptivePreset.compressorStrength} " +
+                                    "preGain=${"%.1f".format(profile.adaptivePreset.preGain)} " +
+                                    "dryMix=${"%.2f".format(profile.adaptivePreset.dryMix)} " +
+                                    "conf=${"%.2f".format(profile.confidence)}"
+                            )
+                        } catch (_: Exception) {
+                        }
+                    }
+                }
+
                 if (batchPlan != null) {
                     try {
                         val cleanedParts = ArrayList<File>()
                         var totalCloudSec = 0f
                         var hasCloudSec = false
+                        val selectedModeBase = runtimeAdaptiveProfile?.adaptivePreset?.mode?.let { m ->
+                            if (modesSnap.isEmpty() || modesSnap.contains(m)) m else cloudModeForPresetWithFallback(cleaningPreset)
+                        } ?: cloudModeForPresetWithFallback(cleaningPreset)
+                        val selectedMode = selectedModeBase
+                        val requestedMode = cloudModeForPreset(cleaningPreset)
+                        Log.d(
+                            TAG,
+                            "Cloud clean start requestedMode=$requestedMode selectedMode=$selectedMode chunks=${batchPlan.chunkFiles.size}"
+                        )
+                        if (selectedMode != requestedMode) {
+                            runOnUiThread {
+                                Toast.makeText(
+                                    this,
+                                    "Server mode fallback: $requestedMode -> $selectedMode",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
                         batchPlan.chunkFiles.forEachIndexed { i, chunk ->
                             val outPart = File(outputDir, "cleaned_${timestamp}_part%02d.wav".format(i + 1))
                             val cloud = voiceApi.cleanAudio(
-                                inputWav = chunk,
-                                outputWav = outPart,
-                                mode = cloudModeForPreset(cleaningPreset)
+                                audioFile = chunk,
+                                outputFile = outPart,
+                                mode = selectedMode
                             )
                             if (cloud.processingTimeSec != null) {
                                 totalCloudSec += cloud.processingTimeSec
                                 hasCloudSec = true
                             }
-                            cleanedParts.add(outPart)
+                            cleanedParts.add(cloud.outputFile)
+                            Log.d(
+                                TAG,
+                                "Cloud chunk complete index=${i + 1}/${batchPlan.chunkFiles.size} output=${cloud.outputFile.name} sec=${cloud.processingTimeSec}"
+                            )
                         }
                         success = mergeCleanedWavChunks(cleanedParts, cleanedFile)
+                        Log.d(TAG, "Cloud merge success=$success output=${cleanedFile.name}")
                         usedCloud = success
                         cloudChunkCount = batchPlan.chunkFiles.size
                         cloudProcessingTimeSec = if (hasCloudSec) totalCloudSec else null
+                        if (success && batchPlan.chunkFiles.size == 1) {
+                            val oPcm = readWavPcm16Data(batchPlan.inputWav)
+                            val cPcm = readWavPcm16Data(cleanedFile)
+                            if (oPcm != null && cPcm != null) {
+                                val oShort = oPcm.pcm16LeToShortArray()
+                                var finalQ = ProcessingQualityGuard.compare(oShort, cPcm.pcm16LeToShortArray())
+                                if (!finalQ.pass) {
+                                    Log.w(
+                                        TAG,
+                                        "Quality guard issues=${finalQ.issues} dRMS=${"%.2f".format(finalQ.rmsDeltaDb)} " +
+                                            "dPeak=${"%.2f".format(finalQ.peakDeltaDb)}"
+                                    )
+                                    val mild = milderCloudMode(selectedMode, modesSnap)
+                                    if (mild != null) {
+                                        try {
+                                            val chunk = batchPlan.chunkFiles.first()
+                                            val outRetry = File(outputDir, "cleaned_${timestamp}_retry.wav")
+                                            voiceApi.cleanAudio(
+                                                audioFile = chunk,
+                                                outputFile = outRetry,
+                                                mode = mild
+                                            )
+                                            val retryPcm = readWavPcm16Data(outRetry)
+                                            if (retryPcm != null) {
+                                                val q2 = ProcessingQualityGuard.compare(
+                                                    oShort,
+                                                    retryPcm.pcm16LeToShortArray()
+                                                )
+                                                val better = q2.pass || q2.rmsDeltaDb > finalQ.rmsDeltaDb
+                                                if (better) {
+                                                    outRetry.copyTo(cleanedFile, overwrite = true)
+                                                    finalQ = q2
+                                                    Log.i(
+                                                        TAG,
+                                                        "Quality retry applied mode=$mild pass=${q2.pass}"
+                                                    )
+                                                    runOnUiThread {
+                                                        Toast.makeText(
+                                                            this,
+                                                            "Gentler clean applied ($mild)",
+                                                            Toast.LENGTH_SHORT
+                                                        ).show()
+                                                    }
+                                                }
+                                            }
+                                            try {
+                                                outRetry.delete()
+                                            } catch (_: Exception) {
+                                            }
+                                        } catch (e: Exception) {
+                                            Log.d(TAG, "Quality retry skipped: ${e.message}")
+                                        }
+                                    }
+
+                                    val dryMix = runtimeAdaptiveProfile?.adaptivePreset?.dryMix?.toFloat() ?: 0f
+                                    if (dryMix > 0f) {
+                                        try {
+                                            applyDryMixFromOriginal(batchPlan.inputWav, cleanedFile, dryMix)
+                                        } catch (e: Exception) {
+                                            Log.d(TAG, "Dry mix skipped: ${e.message}")
+                                        }
+                                    }
+
+                                    if (finalQ.issues.contains("output_very_quiet")) {
+                                        try {
+                                            val targetDb = if ((runtimeAdaptiveProfile?.adaptivePreset?.preGain ?: 2.5) >= 4.0) -36f else -40f
+                                            val boosted = applyMinLoudnessFloor(cleanedFile, minRmsDbfs = targetDb)
+                                            if (boosted) {
+                                                runOnUiThread {
+                                                    Toast.makeText(
+                                                        this,
+                                                        "Output boosted for audibility",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            Log.d(TAG, "Loudness floor skipped: ${e.message}")
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     } catch (_: Exception) {
                         success = false
                     }
                 }
 
                 if (!success) {
+                    Log.d(TAG, "Falling back to local cleaning path")
                     if (!audioProcessor.initialize()) {
                         throw IllegalStateException("Failed to initialize local cleaner")
                     }
-                    audioProcessor.cleaningPreset = cleaningPreset
+                    audioProcessor.cleaningPreset =
+                        runtimeAdaptiveProfile?.adaptivePreset?.toCleaningPreset() ?: cleaningPreset
                     success = audioProcessor.cleanAudioFile(uri, cleanedFile) { _ -> }
                     audioProcessor.destroy()
                 }
@@ -784,9 +1433,12 @@ class MainActivity : ComponentActivity() {
                 runOnUiThread {
                     isCleaning = false
                     selectedFileUri = null
+                    lastAdaptiveProfile = null
+                    adaptiveAnalysisLoading = false
                     
                     if (success) {
                         val dSec = wavDurationSec(cleanedFile)
+                        Log.d(TAG, "Cleaning success usedCloud=$usedCloud durationSec=$dSec file=${cleanedFile.name}")
                         val pair = AudioPair(
                             timestamp = timestamp,
                             time = getCurrentTimeFormatted(),
@@ -818,6 +1470,7 @@ class MainActivity : ComponentActivity() {
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                Log.e(TAG, "processAudioFileWithResult failed: ${e.message}", e)
                 runOnUiThread {
                     isCleaning = false
                     Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -826,6 +1479,88 @@ class MainActivity : ComponentActivity() {
         }.start()
     }
     
+    private fun submitUserFeedback(
+        pair: AudioPair,
+        clearVoice: Boolean,
+        issueType: String?,
+        issueTimestamp: String?,
+        notes: String?
+    ) {
+        Thread {
+            val mode = when (processingFlow) {
+                ProcessingFlow.REEL_MODE -> "reel"
+                ProcessingFlow.CLEAN -> "clean"
+                ProcessingFlow.EXTRACT_VOICE -> "extract_voice"
+                ProcessingFlow.ADD_BACKGROUND -> "add_background"
+                ProcessingFlow.VIDEO_PROCESS -> "video_process"
+            }
+            val issueNorm = issueType?.trim().orEmpty().lowercase(Locale.US)
+            val resultLabel = if (clearVoice) {
+                "good"
+            } else {
+                when {
+                    issueNorm.contains("quiet") -> "quiet"
+                    issueNorm.contains("artifact") -> "artifacts"
+                    else -> "artifacts"
+                }
+            }
+            val payload = JSONObject().apply {
+                put("app_version", "android-debug")
+                put("device_model", Build.MODEL)
+                put("os_version", "Android ${Build.VERSION.RELEASE}")
+                put("sample_timestamp", pair.timestamp)
+                put("mode_used", mode)
+                put("input_type", "unknown")
+                put("result_label", resultLabel)
+                put("issue_timestamp", issueTimestamp?.trim().orEmpty())
+                put("notes", notes?.trim().orEmpty())
+                put("cleaned_file", pair.cleanedFile)
+                put("extra_meta", JSONObject().apply {
+                    put("clear_voice", clearVoice)
+                    put("issue_type", issueType?.trim().orEmpty())
+                    put("is_recording", pair.isRecording)
+                    put("duration_sec", pair.durationSec)
+                })
+            }
+            val ok = postFeedbackToApi(payload) || appendFeedbackLocally(payload)
+            runOnUiThread {
+                if (ok) {
+                    Toast.makeText(this, "Feedback sent. Thanks!", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Feedback save failed", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun postFeedbackToApi(payload: JSONObject): Boolean {
+        return try {
+            val endpoint = "https://shadowselfwork.com/voice/feedback/"
+            val conn = java.net.URL(endpoint).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 15000
+            conn.readTimeout = 20000
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+            conn.responseCode in 200..299
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun appendFeedbackLocally(payload: JSONObject): Boolean {
+        return try {
+            val dir = File(getExternalFilesDir(null), "feedback")
+            if (!dir.exists()) dir.mkdirs()
+            val out = File(dir, "feedback_queue.jsonl")
+            out.appendText(payload.toString() + "\n")
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     // Share file
     private fun shareFile(fileName: String) {
         val outputDir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "BolSaaf")
@@ -842,16 +1577,23 @@ class MainActivity : ComponentActivity() {
             file
         )
         
+        val mime = when {
+            fileName.endsWith(".mp4", true) -> "video/mp4"
+            fileName.endsWith(".wav", true) -> "audio/wav"
+            fileName.endsWith(".mp3", true) -> "audio/mpeg"
+            fileName.endsWith(".m4a", true) -> "audio/mp4"
+            else -> "*/*"
+        }
         val shareIntent = android.content.Intent().apply {
             action = android.content.Intent.ACTION_SEND
-            type = "audio/wav"
+            type = mime
             putExtra(android.content.Intent.EXTRA_STREAM, uri)
-            putExtra(android.content.Intent.EXTRA_SUBJECT, "Cleaned Audio")
-            putExtra(android.content.Intent.EXTRA_TEXT, "Here is my cleaned audio file!")
+            putExtra(android.content.Intent.EXTRA_SUBJECT, "BolSaaf output")
+            putExtra(android.content.Intent.EXTRA_TEXT, "Shared from BolSaaf")
             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         
-        startActivity(android.content.Intent.createChooser(shareIntent, "Share Audio"))
+        startActivity(android.content.Intent.createChooser(shareIntent, "Share"))
     }
     
     // Download file (copy to Downloads)
