@@ -25,6 +25,7 @@ import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.audio.AudioRecorder
 import com.bolsaaf.audio.VoiceApiPhase2Client
 import com.bolsaaf.audio.AdaptiveAudioAnalyzer
+import com.bolsaaf.audio.FeedbackAdaptiveMemory
 import com.bolsaaf.audio.pcm16LeToShortArray
 import com.bolsaaf.audio.ProcessingQualityGuard
 import com.bolsaaf.audio.VoiceBackground
@@ -764,7 +765,8 @@ class MainActivity : ComponentActivity() {
                     }
                     return@Thread
                 }
-                val profile = AdaptiveAudioAnalyzer.analyze(pcm.pcm16LeToShortArray(), 48000)
+                val raw = AdaptiveAudioAnalyzer.analyze(pcm.pcm16LeToShortArray(), 48000)
+                val profile = FeedbackAdaptiveMemory.applyFromFeedbackHistory(this, raw)
                 runOnUiThread {
                     lastAdaptiveProfile = profile
                     adaptiveAnalysisLoading = false
@@ -1270,7 +1272,8 @@ class MainActivity : ComponentActivity() {
                 batchPlan?.let { plan ->
                     readWavPcm16Data(plan.inputWav)?.let { pcmBytes ->
                         try {
-                            val profile = AdaptiveAudioAnalyzer.analyze(pcmBytes.pcm16LeToShortArray(), 48000)
+                            val raw = AdaptiveAudioAnalyzer.analyze(pcmBytes.pcm16LeToShortArray(), 48000)
+                            val profile = FeedbackAdaptiveMemory.applyFromFeedbackHistory(this, raw)
                             runtimeAdaptiveProfile = profile
                             Log.i(
                                 TAG,
@@ -1487,6 +1490,7 @@ class MainActivity : ComponentActivity() {
         notes: String?
     ) {
         Thread {
+            FeedbackAdaptiveMemory.record(this@MainActivity, clearVoice, issueType, notes)
             val mode = when (processingFlow) {
                 ProcessingFlow.REEL_MODE -> "reel"
                 ProcessingFlow.CLEAN -> "clean"

@@ -23,8 +23,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -78,6 +76,15 @@ val AccentPurple = Color(0xFF9C27B0)        // Purple highlight
 val AccentCyan = Color(0xFF00BCD4)          // Cyan secondary
 val TextPrimary = Color(0xFFFFFFFF)         // White text
 val TextSecondary = Color(0xFF8B95A5)       // Gray text
+val PrimaryGradient = Brush.linearGradient(
+    colors = listOf(
+        AccentPurple.copy(alpha = 0.9f),
+        AccentGreen.copy(alpha = 0.85f),
+        AccentCyan.copy(alpha = 0.75f)
+    ),
+    start = Offset(0f, 0f),
+    end = Offset(400f, 400f)
+)
 
 data class SaveInfo(
     val cleanedFileName: String,
@@ -598,12 +605,6 @@ fun HeroCleanPanel(
     helperText: String,
     onCleanTap: () -> Unit
 ) {
-    val panelGradient = Brush.linearGradient(
-        colors = listOf(AccentPurple, AccentGreen.copy(alpha = 0.6f)),
-        start = Offset.Zero,
-        end = Offset.Infinite
-    )
-
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -614,7 +615,7 @@ fun HeroCleanPanel(
     ) {
         Box(
             modifier = Modifier
-                .background(brush = panelGradient)
+                .background(brush = PrimaryGradient)
                 .clip(RoundedCornerShape(24.dp))
                 .border(
                     width = 1.dp,
@@ -736,7 +737,7 @@ fun QuickActionCard(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF142414))
+            .background(PrimaryGradient)
             .clickable(enabled = !isLoading) { onClick() }
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -824,8 +825,13 @@ fun StatCard(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF1A2E1A))
+            .clip(RoundedCornerShape(14.dp))
+            .background(PrimaryGradient)
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.2f),
+                shape = RoundedCornerShape(14.dp)
+            )
             .padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -948,14 +954,32 @@ fun ComparisonCard(
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF111826)
+            containerColor = Color.Transparent
         ),
         shape = RoundedCornerShape(24.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(18.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = PrimaryGradient,
+                    shape = RoundedCornerShape(24.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(24.dp)
+                )
+                .padding(1.dp)
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(Color(0xFF050B17).copy(alpha = 0.85f))
+                    .padding(18.dp)
+            ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1030,12 +1054,12 @@ fun ComparisonCard(
                     onClick = onShare
                 )
                 VoiceActionPill(
-                    icon = Icons.Filled.Download,
+                    icon = Icons.Filled.CheckCircle,
                     label = "Save",
                     onClick = onDownload
                 )
                 VoiceActionPill(
-                    icon = Icons.Filled.Feedback,
+                    icon = Icons.Filled.Info,
                     label = "Feedback",
                     onClick = onFeedback
                 )
@@ -1048,6 +1072,7 @@ fun ComparisonCard(
             }
         }
     }
+}
 }
 
 @Composable
@@ -1188,38 +1213,44 @@ fun BottomNavBar(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = Color(0xFF0D1F0D)
+        color = Color.Transparent
     ) {
-        Row(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp, horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .background(PrimaryGradient)
+                .padding(vertical = 12.dp, horizontal = 16.dp)
         ) {
-            NavItem(
-                icon = Icons.Filled.Home,
-                label = "Cleaner",
-                isSelected = selectedTab == 0,
-                onClick = { onTabSelected(0) }
-            )
-            NavItem(
-                icon = Icons.Default.PlayArrow,  // Using PlayArrow as Mic alternative
-                label = "Live",
-                isSelected = selectedTab == 1,
-                onClick = { onTabSelected(1) }
-            )
-            NavItem(
-                icon = Icons.Filled.Menu,
-                label = "History",
-                isSelected = selectedTab == 2,
-                onClick = { onTabSelected(2) }
-            )
-            NavItem(
-                icon = Icons.Default.Person,
-                label = "Profile",
-                isSelected = selectedTab == 3,
-                onClick = { onTabSelected(3) }
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                NavItem(
+                    icon = Icons.Filled.Home,
+                    label = "Cleaner",
+                    isSelected = selectedTab == 0,
+                    onClick = { onTabSelected(0) }
+                )
+                NavItem(
+                    icon = Icons.Default.PlayArrow,  // Using PlayArrow as Mic alternative
+                    label = "Live",
+                    isSelected = selectedTab == 1,
+                    onClick = { onTabSelected(1) }
+                )
+                NavItem(
+                    icon = Icons.Filled.Menu,
+                    label = "History",
+                    isSelected = selectedTab == 2,
+                    onClick = { onTabSelected(2) }
+                )
+                NavItem(
+                    icon = Icons.Default.Person,
+                    label = "Profile",
+                    isSelected = selectedTab == 3,
+                    onClick = { onTabSelected(3) }
+                )
+            }
         }
     }
 }

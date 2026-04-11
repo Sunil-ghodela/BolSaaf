@@ -5,11 +5,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -23,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -136,16 +138,18 @@ fun ProfileScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 ProfileStatCard(
+                    modifier = Modifier.weight(1f),
                     title = "Completed cleans",
                     value = "$completedCleans",
                     description = "Studio-ready",
                     icon = Icons.Filled.Star
                 )
                 ProfileStatCard(
+                    modifier = Modifier.weight(1f),
                     title = "Preset locked",
                     value = cleaningPreset.label,
                     description = "Auto-adjusted",
-                    icon = Icons.Filled.Shield
+                    icon = Icons.Filled.Lock
                 )
             }
 
@@ -164,7 +168,7 @@ fun ProfileScreen(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 ProfileInsightRow(
-                    icon = Icons.Filled.AutoAwesome,
+                    icon = Icons.Filled.CheckCircle,
                     title = "Adaptive preset live",
                     subtitle = "Your voice is now mapped to ${cleaningPreset.label} automatically"
                 )
@@ -173,7 +177,7 @@ fun ProfileScreen(
                     color = Color.White.copy(alpha = 0.08f)
                 )
                 ProfileInsightRow(
-                    icon = Icons.Filled.Wifi,
+                    icon = Icons.Filled.Info,
                     title = "Cloud sync",
                     subtitle = "Last backup 12 hours ago · share results anytime"
                 )
@@ -182,7 +186,7 @@ fun ProfileScreen(
                     color = Color.White.copy(alpha = 0.08f)
                 )
                 ProfileInsightRow(
-                    icon = Icons.Filled.Person,
+                    icon = Icons.Filled.Share,
                     title = "Shareable beats",
                     subtitle = "Tap to share your cleaned tracks in one tap"
                 )
@@ -200,13 +204,14 @@ fun ProfileScreen(
 
 @Composable
 fun ProfileStatCard(
+    modifier: Modifier = Modifier,
     title: String,
     value: String,
     description: String,
     icon: ImageVector
 ) {
     Card(
-        modifier = Modifier.weight(1f),
+        modifier = modifier,
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFF182131)
         ),
