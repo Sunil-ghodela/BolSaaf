@@ -36,6 +36,18 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.random.Random
 import com.bolsaaf.audio.CleaningPreset
+import com.bolsaaf.ui.theme.AccentCyan
+import com.bolsaaf.ui.theme.AccentGreen
+import com.bolsaaf.ui.theme.AccentPurple
+import com.bolsaaf.ui.theme.BackgroundCard
+import com.bolsaaf.ui.theme.BackgroundDark
+import com.bolsaaf.ui.theme.PanelOverlay
+import com.bolsaaf.ui.theme.SliderTrackStrong
+import com.bolsaaf.ui.theme.ThemeBlue
+import com.bolsaaf.ui.theme.ThemeRed
+import com.bolsaaf.ui.theme.SurfaceStripe
+import com.bolsaaf.ui.theme.TextPrimary
+import com.bolsaaf.ui.theme.TextSecondary
 
 /**
  * Live Recording Screen with real-time audio visualization
@@ -74,7 +86,7 @@ fun LiveScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(BackgroundCard.copy(alpha = 0.2f))
+                .background(BackgroundCard.copy(alpha = 0.45f))
         )
         
         // Top Header
@@ -154,8 +166,8 @@ fun LiveScreen(
                         .background(
                             brush = Brush.radialGradient(
                                 colors = listOf(
-                                    Color(0xFF1A2540),
-                                    Color(0xFF0D1420)
+                                    SurfaceStripe,
+                                    BackgroundCard
                                 )
                             )
                         ),
@@ -271,7 +283,7 @@ fun LiveScreen(
                         "Recent Recordings",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = TextPrimary
                     )
                     Text(
                         "${audioPairs.size} files",
@@ -414,7 +426,7 @@ fun StatsBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFF050B17).copy(alpha = 0.9f))
+                    .background(PanelOverlay)
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
@@ -493,7 +505,7 @@ fun StatItem(
             value,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            color = if (isActive) Color.White else TextSecondary.copy(alpha = 0.5f)
+            color = if (isActive) TextPrimary else TextSecondary.copy(alpha = 0.5f)
         )
     }
 }
@@ -520,7 +532,7 @@ fun ModeSelector(
                 )
                 .border(
                     width = 1.dp,
-                    color = Color.White.copy(alpha = 0.15f),
+                    color = SliderTrackStrong.copy(alpha = 0.65f),
                     shape = RoundedCornerShape(30.dp)
                 )
                 .padding(1.dp)
@@ -529,7 +541,7 @@ fun ModeSelector(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(28.dp))
-                    .background(Color(0xFF050B17).copy(alpha = 0.9f))
+                    .background(BackgroundCard)
                     .horizontalScroll(scroll)
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -542,13 +554,22 @@ fun ModeSelector(
                             .clip(RoundedCornerShape(26.dp))
                             .background(
                                 brush = if (isSelected) {
-                                    Brush.horizontalGradient(
-                                        colors = listOf(AccentGreen, AccentCyan.copy(alpha = 0.8f))
-                                    )
+                                    Brush.horizontalGradient(colors = listOf(ThemeRed, ThemeBlue))
                                 } else {
                                     Brush.horizontalGradient(colors = listOf(Color.Transparent, Color.Transparent))
                                 },
                                 shape = RoundedCornerShape(26.dp)
+                            )
+                            .then(
+                                if (!isSelected) {
+                                    Modifier.border(
+                                        1.dp,
+                                        SliderTrackStrong.copy(alpha = 0.4f),
+                                        RoundedCornerShape(26.dp)
+                                    )
+                                } else {
+                                    Modifier
+                                }
                             )
                             .clickable { onModeSelected(index) }
                             .padding(horizontal = 14.dp, vertical = 11.dp),
@@ -560,7 +581,7 @@ fun ModeSelector(
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color.Black else TextSecondary
+                            color = if (isSelected) Color.White else TextSecondary
                         )
                     }
                 }
@@ -704,7 +725,7 @@ fun LiveRecordingCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF050B17).copy(alpha = 0.85f))
+                    .background(PanelOverlay)
                     .padding(12.dp)
             ) {
             // Header with timestamp and remove button
@@ -853,7 +874,7 @@ fun LiveAudioButton(
         Text(
             text = label,
             fontSize = 11.sp,
-            color = Color.White
+            color = TextPrimary
         )
     }
 }
@@ -886,7 +907,7 @@ fun LiveActionButton(
         Text(
             text = label,
             fontSize = 10.sp,
-            color = Color.White
+            color = TextPrimary
         )
     }
 }

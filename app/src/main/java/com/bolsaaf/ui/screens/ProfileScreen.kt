@@ -30,6 +30,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bolsaaf.audio.CleaningPreset
+import com.bolsaaf.ui.theme.AccentCyan
+import com.bolsaaf.ui.theme.AccentGreen
+import com.bolsaaf.ui.theme.AccentPurple
+import com.bolsaaf.ui.theme.BackgroundCard
+import com.bolsaaf.ui.theme.BackgroundDark
+import com.bolsaaf.ui.theme.SliderTrack
+import com.bolsaaf.ui.theme.SurfaceStripe
+import com.bolsaaf.ui.theme.TextPrimary
+import com.bolsaaf.ui.theme.TextSecondary
+import com.bolsaaf.ui.theme.ThemeBlue
+import com.bolsaaf.ui.theme.ThemeRed
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -83,7 +94,7 @@ fun ProfileScreen(
                     text = "Profile",
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = TextPrimary
                 )
                 IconButton(onClick = onOpenSettings) {
                     Icon(
@@ -102,7 +113,7 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
                     .shadow(10.dp, RoundedCornerShape(24.dp)),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF121A2A)),
+                colors = CardDefaults.cardColors(containerColor = SurfaceStripe),
                 shape = RoundedCornerShape(24.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
@@ -122,14 +133,14 @@ fun ProfileScreen(
                                 )
                                 .padding(3.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF1E2A45)),
+                                .background(ThemeBlue.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "B",
                                 fontSize = 28.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = ThemeBlue
                             )
                         }
                         Column(modifier = Modifier.weight(1f)) {
@@ -137,7 +148,7 @@ fun ProfileScreen(
                                 text = displayName,
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = TextPrimary
                             )
                             Text(
                                 text = userHandle,
@@ -207,7 +218,7 @@ fun ProfileScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0C1424)),
+                colors = CardDefaults.cardColors(containerColor = BackgroundCard),
                 shape = RoundedCornerShape(20.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
@@ -221,7 +232,7 @@ fun ProfileScreen(
                             text = if (showProMemberBadge) "Pro Plan" else "Free plan",
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = TextPrimary
                         )
                         Surface(
                             shape = RoundedCornerShape(8.dp),
@@ -252,7 +263,7 @@ fun ProfileScreen(
                             text = "$freeMinutesLeft / $freeQuotaMinutes",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = TextPrimary
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -261,7 +272,7 @@ fun ProfileScreen(
                             .fillMaxWidth()
                             .height(8.dp)
                             .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xFF1E2A40))
+                            .background(SliderTrack)
                     ) {
                         Box(
                             modifier = Modifier
@@ -269,7 +280,7 @@ fun ProfileScreen(
                                 .fillMaxWidth(usedFraction.coerceIn(0f, 1f).coerceAtLeast(0.04f))
                                 .background(
                                     brush = Brush.horizontalGradient(
-                                        listOf(Color(0xFFE53935), Color(0xFF42A5F5))
+                                        listOf(ThemeRed, ThemeBlue)
                                     )
                                 )
                         )
@@ -313,7 +324,7 @@ fun ProfileScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF121A2A)),
+                colors = CardDefaults.cardColors(containerColor = SurfaceStripe),
                 shape = RoundedCornerShape(18.dp)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
@@ -321,7 +332,7 @@ fun ProfileScreen(
                         text = "💎 Real insight",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = TextPrimary
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(

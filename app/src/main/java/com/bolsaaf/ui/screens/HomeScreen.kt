@@ -3,6 +3,7 @@ package com.bolsaaf.ui.screens
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -53,12 +54,31 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bolsaaf.ui.VibeUi
+import com.bolsaaf.ui.theme.AccentCyan
+import com.bolsaaf.ui.theme.AccentGreen
+import com.bolsaaf.ui.theme.AccentPurple
+import com.bolsaaf.ui.theme.BackgroundCard
+import com.bolsaaf.ui.theme.BackgroundDark
+import com.bolsaaf.ui.theme.CtaOrangeRedGradient
+import com.bolsaaf.ui.theme.NavUnselected
+import com.bolsaaf.ui.theme.PanelOverlay
+import com.bolsaaf.ui.theme.PrimaryGradient
+import com.bolsaaf.ui.theme.SliderTrack
+import com.bolsaaf.ui.theme.SliderTrackStrong
+import com.bolsaaf.ui.theme.SubtitleBluePurple
+import com.bolsaaf.ui.theme.SurfaceStripe
+import com.bolsaaf.ui.theme.TextPrimary
+import com.bolsaaf.ui.theme.TextSecondary
+import com.bolsaaf.ui.theme.ThemeBlue
+import com.bolsaaf.ui.theme.ThemeRed
+import com.bolsaaf.ui.theme.TitleVideoAccent
 import com.bolsaaf.audio.AdaptiveAudioAnalyzer
 import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.audio.WavPreview
@@ -68,24 +88,6 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-
-// New Premium Color Scheme
-val BackgroundDark = Color(0xFF0A0F1E)      // Deep blue background
-val BackgroundCard = Color(0xFF141B2D)      // Card background
-val AccentGreen = Color(0xFF00E676)         // Primary accent
-val AccentPurple = Color(0xFF9C27B0)        // Purple highlight
-val AccentCyan = Color(0xFF00BCD4)          // Cyan secondary
-val TextPrimary = Color(0xFFFFFFFF)         // White text
-val TextSecondary = Color(0xFF8B95A5)       // Gray text
-val PrimaryGradient = Brush.linearGradient(
-    colors = listOf(
-        AccentPurple.copy(alpha = 0.9f),
-        AccentGreen.copy(alpha = 0.85f),
-        AccentCyan.copy(alpha = 0.75f)
-    ),
-    start = Offset(0f, 0f),
-    end = Offset(400f, 400f)
-)
 
 data class SaveInfo(
     val cleanedFileName: String,
@@ -278,10 +280,11 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp)
-                        .height(52.dp),
+                        .height(52.dp)
+                        .background(PrimaryGradient, RoundedCornerShape(14.dp)),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFE65100),
+                        containerColor = Color.Transparent,
                         contentColor = Color.White
                     )
                 ) {
@@ -371,12 +374,12 @@ fun HomeScreen(
                         "Recent Cleans",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = TextPrimary
                     )
                     TextButton(onClick = onGoToHistory) {
                         Text(
                             "See All →",
-                            color = Color(0xFF00E676),
+                            color = ThemeRed,
                             fontSize = 14.sp
                         )
                     }
@@ -527,12 +530,10 @@ fun GlassmorphicHeader(
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(
-                Color.White.copy(alpha = 0.05f)
-            )
+            .background(Color.White.copy(alpha = 0.55f))
             .border(
                 width = 1.dp,
-                color = Color.White.copy(alpha = 0.1f),
+                color = SliderTrackStrong.copy(alpha = 0.7f),
                 shape = RoundedCornerShape(16.dp)
             )
             .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -543,19 +544,15 @@ fun GlassmorphicHeader(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(Color(0xFF00E676), Color(0xFF00C853))
-                        )
-                    ),
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Brush.linearGradient(colors = listOf(ThemeRed, ThemeBlue))),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Icons.Filled.Add,
                     contentDescription = null,
-                    tint = Color.Black,
-                    modifier = Modifier.size(20.dp)
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
@@ -564,37 +561,38 @@ fun GlassmorphicHeader(
                     "BolSaaf",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = TextPrimary
                 )
                 Text(
-                    "Reel & voice studio",
+                    "Audio & Video Studio",
                     fontSize = 12.sp,
-                    color = Color(0xFFAAAAAA)
+                    color = TextSecondary
                 )
             }
         }
-        
+
         Row(verticalAlignment = Alignment.CenterVertically) {
             Surface(
-                color = Color(0xFF00E676).copy(alpha = 0.15f),
-                shape = RoundedCornerShape(20.dp)
+                color = Color.White,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.border(1.dp, ThemeRed.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        Icons.Filled.Info,
-                        contentDescription = null,
-                        tint = Color(0xFF00E676),
-                        modifier = Modifier.size(14.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(ThemeRed)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         "$freeMinutesLeft min free",
                         fontSize = 12.sp,
-                        color = Color(0xFF00E676),
-                        fontWeight = FontWeight.Medium
+                        color = ThemeRed,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
@@ -604,24 +602,39 @@ fun GlassmorphicHeader(
 
 @Composable
 fun AnimatedTitle() {
-    val infiniteTransition = rememberInfiniteTransition(label = "title")
-    
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             "Studio jaisi awaaz",
             fontSize = 32.sp,
             fontWeight = FontWeight.ExtraBold,
-            color = Color.White,
+            color = TextPrimary,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            "Ghar baithe banao",
-            fontSize = 32.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = AccentGreen,
-            textAlign = TextAlign.Center
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "Video",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = TitleVideoAccent
+            )
+            Text(
+                text = " + ",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = TextSecondary
+            )
+            Text(
+                text = "Audio dono",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.ExtraBold,
+                style = TextStyle(brush = SubtitleBluePurple)
+            )
+        }
     }
 }
 
@@ -635,115 +648,102 @@ fun HeroCleanPanel(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .shadow(12.dp, RoundedCornerShape(24.dp)),
-        color = Color.Transparent
+            .padding(horizontal = 20.dp),
+        color = BackgroundCard,
+        shape = RoundedCornerShape(24.dp),
+        tonalElevation = 1.dp,
+        shadowElevation = 6.dp
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .background(brush = PrimaryGradient)
-                .clip(RoundedCornerShape(24.dp))
-                .border(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(24.dp)
-                )
+                .border(1.dp, SliderTrackStrong.copy(alpha = 0.35f), RoundedCornerShape(24.dp))
                 .padding(20.dp)
         ) {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "🎧 Reel ready voice",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = TextPrimary
+                )
+                Surface(
+                    color = SurfaceStripe,
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        text = "🎧 Reel ready voice",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        text = cleaningPreset.label,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = ThemeBlue
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Clean • Balanced • Natural",
+                fontSize = 14.sp,
+                color = TextSecondary
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(CtaOrangeRedGradient)
+                    .clickable { onCleanTap() }
+                    .padding(vertical = 14.dp, horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (isRecording) Icons.Filled.Close else Icons.Filled.Edit,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isRecording) "Stop Recording" else "Clean Audio / Video",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
-                    Surface(
-                        color = Color.White.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = cleaningPreset.label,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.White
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = "Clean • Balanced • Natural",
-                    fontSize = 14.sp,
-                    color = Color.White.copy(alpha = 0.9f)
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(
-                            brush = Brush.linearGradient(
-                                colors = listOf(Color.White.copy(alpha = 0.9f), Color.White.copy(alpha = 0.2f))
-                            )
-                        )
-                        .clickable { onCleanTap() }
-                        .padding(vertical = 12.dp, horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = if (isRecording) Icons.Filled.Close else Icons.Filled.PlayArrow,
-                        contentDescription = null,
-                        tint = Color.Black,
-                        modifier = Modifier.size(28.dp)
+                    Text(
+                        text = if (isRecording) "Your voice is being captured" else helperText,
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.92f)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = if (isRecording) "Stop Recording" else "Tap to Clean",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black
-                        )
-                        Text(
-                            text = if (isRecording) "Your voice is being captured" else helperText,
-                            fontSize = 12.sp,
-                            color = Color.Black.copy(alpha = 0.6f)
-                        )
-                    }
-                    Spacer(modifier = Modifier.weight(1f))
-                    Surface(
-                        modifier = Modifier,
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color.Black.copy(alpha = 0.05f)
-                    ) {
-                        Text(
-                            text = "LIVE",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black
-                        )
-                    }
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = helperText,
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.9f)
-                )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White.copy(alpha = 0.22f)
+                ) {
+                    Text(
+                        text = "LIVE",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = helperText,
+                fontSize = 12.sp,
+                color = TextSecondary
+            )
         }
     }
 }
@@ -778,8 +778,8 @@ fun QuickActionCard(
                         Brush.linearGradient(listOf(Color(0xFFFFB300), Color(0xFFFF8F00)))
                     else if (isLoading)
                         Brush.linearGradient(listOf(AccentCyan, AccentGreen))
-                    else 
-                        Brush.linearGradient(listOf(Color(0xFF00E676), Color(0xFF00C853)))
+                    else
+                        Brush.linearGradient(listOf(ThemeRed, ThemeBlue))
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -865,7 +865,7 @@ fun StatCard(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = Color(0xFF00E676),
+            tint = ThemeBlue,
             modifier = Modifier.size(20.dp)
         )
         Spacer(modifier = Modifier.height(4.dp))
@@ -940,7 +940,7 @@ fun MiniWaveformStrip(cleanedWav: File, modifier: Modifier = Modifier) {
             LinearProgressIndicator(
                 modifier = Modifier.fillMaxWidth().height(3.dp),
                 color = AccentGreen.copy(alpha = 0.5f),
-                trackColor = Color(0xFF1A2540)
+                trackColor = SliderTrack
             )
         } else {
             bars.forEach { h ->
@@ -1004,7 +1004,7 @@ fun ComparisonCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFF050B17).copy(alpha = 0.85f))
+                    .background(PanelOverlay)
                     .padding(18.dp)
             ) {
             Row(
@@ -1097,9 +1097,9 @@ fun ComparisonCard(
                     onClick = onRemove
                 )
             }
+            }
         }
     }
-}
 }
 
 @Composable
@@ -1111,8 +1111,10 @@ fun VoiceActionPill(
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = Color(0xFF152033),
-        modifier = Modifier.clickable { onClick() }
+        color = SurfaceStripe,
+        modifier = Modifier
+            .border(1.dp, SliderTrackStrong.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+            .clickable { onClick() }
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -1129,7 +1131,7 @@ fun VoiceActionPill(
                 text = label,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color.White
+                color = TextPrimary
             )
         }
     }
@@ -1147,7 +1149,7 @@ fun AudioSideBox(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF1A2540))
+            .background(SurfaceStripe)
             .border(
                 width = if (isPlaying) 2.dp else 1.dp,
                 color = if (isPlaying) AccentGreen else borderColor,
@@ -1297,14 +1299,14 @@ fun NavItem(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = if (isSelected) Color(0xFF00E676) else Color(0xFF666666),
+            tint = if (isSelected) ThemeRed else NavUnselected,
             modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             label,
             fontSize = 10.sp,
-            color = if (isSelected) Color(0xFF00E676) else Color(0xFF666666),
+            color = if (isSelected) ThemeRed else NavUnselected,
             fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
         )
         if (isSelected) {
@@ -1313,7 +1315,7 @@ fun NavItem(
                 modifier = Modifier
                     .size(4.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF00E676))
+                    .background(ThemeRed)
             )
         }
     }
@@ -1334,7 +1336,7 @@ fun AudioWaveformAnimation(modifier: Modifier = Modifier) {
             val alpha = (1f - (radius - 100f) / 320f).coerceIn(0f, 0.3f)
             
             drawCircle(
-                color = Color(0xFF00E676).copy(alpha = alpha),
+                color = ThemeBlue.copy(alpha = alpha),
                 radius = radius,
                 center = Offset(centerX, centerY),
                 style = Stroke(width = 2f)
@@ -1382,7 +1384,7 @@ fun FeedbackDialog(
             shape = RoundedCornerShape(20.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Quick feedback", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("Quick feedback", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Text(
                     pair.cleanedFile,
                     color = TextSecondary,
@@ -1520,7 +1522,7 @@ fun UploadProgressDialog(
                         .height(8.dp)
                         .clip(RoundedCornerShape(4.dp)),
                     color = AccentGreen,
-                    trackColor = Color(0xFF1A2540)
+                    trackColor = SliderTrack
                 )
                 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1560,7 +1562,7 @@ fun SuggestedPresetChipRow(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = Color(0xFF1A2540),
+        color = SurfaceStripe,
         shape = RoundedCornerShape(14.dp)
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
@@ -1586,7 +1588,7 @@ fun SuggestedPresetChipRow(
                     text = p.uiHeadline(),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = TextPrimary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
@@ -1673,7 +1675,7 @@ fun CleanFileDialog(
                     "File Ready!",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = TextPrimary
                 )
                 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1720,13 +1722,13 @@ fun CleanFileDialog(
                     Icon(
                         imageVector = Icons.Filled.PlayArrow,
                         contentDescription = null,
-                        tint = Color.Black,
+                        tint = Color.White,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         primaryButtonLabel,
-                        color = Color.Black,
+                        color = Color.White,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1798,7 +1800,7 @@ fun ProcessingDialog(
                     title,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = TextPrimary
                 )
                 
                 Spacer(modifier = Modifier.height(12.dp))
