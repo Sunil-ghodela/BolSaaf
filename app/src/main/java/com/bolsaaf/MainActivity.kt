@@ -16,6 +16,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
+import com.bolsaaf.ui.VibeUi
 import com.bolsaaf.ui.screens.AudioPair
 import com.bolsaaf.ui.screens.HistoryScreen
 import com.bolsaaf.ui.screens.LiveScreen
@@ -73,7 +74,7 @@ class MainActivity : ComponentActivity() {
     private var freeMinutesLeft by mutableIntStateOf(8)
     /** Order matches Home flow chips: Reel first (product default). */
     private enum class ProcessingFlow {
-        REEL_MODE, CLEAN, EXTRACT_VOICE, ADD_BACKGROUND, VIDEO_PROCESS
+        REEL_MODE, CLEAN, ADD_BACKGROUND, VIDEO_PROCESS
     }
 
     private var serverAvailableModes by mutableStateOf<Set<String>>(emptySet())
@@ -161,7 +162,6 @@ class MainActivity : ComponentActivity() {
                         processingModes = listOf(
                             "Reel ★",
                             "Quick",
-                            "Extract",
                             "BG",
                             "Video"
                         ),
@@ -191,7 +191,9 @@ class MainActivity : ComponentActivity() {
                         },
                         showBackgroundControls = processingFlow == ProcessingFlow.ADD_BACKGROUND ||
                             processingFlow == ProcessingFlow.REEL_MODE,
-                        backgroundLabels = voiceBackgrounds.map { b -> b.label.ifBlank { b.id } },
+                        backgroundLabels = voiceBackgrounds.map { b ->
+                            VibeUi.displayLabelForBackgroundId(b.id, b.label.ifBlank { b.id })
+                        },
                         selectedBackgroundIndex = selectedBackgroundIndex,
                         onBackgroundIndexChange = { selectedBackgroundIndex = it },
                         bgMixVolume = bgMixVolume,
@@ -251,9 +253,18 @@ class MainActivity : ComponentActivity() {
                         onTabSelected = { tab -> selectedTab = tab },
                         cleaningPreset = cleaningPreset,
                         freeMinutesLeft = freeMinutesLeft,
+                        freeQuotaMinutes = 8,
                         completedCleans = getAudioPairs().size,
+                        totalProcessedMinutes = totalProcessedMinutes(),
+                        dayStreak = readProfileStreak(),
+                        displayName = "You",
+                        userHandle = "@bolsaaf",
+                        showProMemberBadge = false,
                         onUpgrade = {
                             Toast.makeText(this, "Upgrade flow coming soon", Toast.LENGTH_SHORT).show()
+                        },
+                        onOpenSettings = {
+                            Toast.makeText(this, "Settings coming soon", Toast.LENGTH_SHORT).show()
                         }
                     )
                     else -> HomeScreen(
@@ -272,7 +283,6 @@ class MainActivity : ComponentActivity() {
                         processingModes = listOf(
                             "Reel ★",
                             "Quick",
-                            "Extract",
                             "BG",
                             "Video"
                         ),
@@ -302,7 +312,9 @@ class MainActivity : ComponentActivity() {
                         },
                         showBackgroundControls = processingFlow == ProcessingFlow.ADD_BACKGROUND ||
                             processingFlow == ProcessingFlow.REEL_MODE,
-                        backgroundLabels = voiceBackgrounds.map { b -> b.label.ifBlank { b.id } },
+                        backgroundLabels = voiceBackgrounds.map { b ->
+                            VibeUi.displayLabelForBackgroundId(b.id, b.label.ifBlank { b.id })
+                        },
                         selectedBackgroundIndex = selectedBackgroundIndex,
                         onBackgroundIndexChange = { selectedBackgroundIndex = it },
                         bgMixVolume = bgMixVolume,
@@ -658,7 +670,27 @@ class MainActivity : ComponentActivity() {
         while (audioPairsList.size > 10) {
             audioPairsList.removeAt(audioPairsList.size - 1)
         }
+        noteCleanForStreak()
     }
+
+    private fun noteCleanForStreak() {
+        val sp = getSharedPreferences("bolsaaf_streak", MODE_PRIVATE)
+        val ymd = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+        val last = sp.getString("last_active", "") ?: ""
+        if (last == ymd) return
+        val yCal = Calendar.getInstance()
+        yCal.add(Calendar.DAY_OF_YEAR, -1)
+        val yest = SimpleDateFormat("yyyyMMdd", Locale.US).format(yCal.time)
+        val prev = sp.getInt("count", 0)
+        val next = if (last == yest) prev + 1 else 1
+        sp.edit().putString("last_active", ymd).putInt("count", next).apply()
+    }
+
+    private fun readProfileStreak(): Int =
+        getSharedPreferences("bolsaaf_streak", MODE_PRIVATE).getInt("count", 0)
+
+    private fun totalProcessedMinutes(): Float =
+        (getAudioPairs().sumOf { it.durationSec.toDouble() } / 60.0).toFloat()
 
     // Remove audio pair by timestamp
     private fun removeAudioPair(timestamp: String) {
@@ -831,9 +863,8 @@ class MainActivity : ComponentActivity() {
             try {
                 saveOriginalFromUri(uri, originalFile)
                 isCleaning = true
-                val mode = modeForPhase2Flow(flowSnapshot, cleaningPreset)
+                val mode = modeForPhase2Flow(cleaningPreset)
                 val accepted = when (flowSnapshot) {
-                    ProcessingFlow.EXTRACT_VOICE -> voiceApiPhase2.extractVoice(originalFile, mode = mode)
                     ProcessingFlow.ADD_BACKGROUND -> voiceApiPhase2.addBackground(
                         originalFile,
                         backgroundId = bgIdSnapshot,
@@ -866,15 +897,6 @@ class MainActivity : ComponentActivity() {
                     else -> status.outputAudioUrl ?: status.cleanedUrl
                 } ?: throw IllegalStateException("No output url in completed job")
                 downloadFromUrl(outputUrl, outFile)
-                if (flowSnapshot == ProcessingFlow.EXTRACT_VOICE &&
-                    outFile.extension.equals("wav", ignoreCase = true)
-                ) {
-                    try {
-                        tuneExtractOutput(uri, outFile, outputDir, timestamp)
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Extract tuning skipped: ${e.message}")
-                    }
-                }
                 val dSec = mediaDurationSec(outFile)
                 runOnUiThread {
                     isCleaning = false
@@ -903,36 +925,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }.start()
-    }
-
-    private fun tuneExtractOutput(uri: Uri, cleanedWav: File, outputDir: File, timestamp: String) {
-        val refWav = File(outputDir, "uploaded_${timestamp}_extract_ref.wav")
-        val exported = audioProcessor.exportUriAsWav(uri, refWav)
-        if (!exported || !refWav.exists()) return
-        try {
-            val oPcm = readWavPcm16Data(refWav) ?: return
-            val cPcm = readWavPcm16Data(cleanedWav) ?: return
-            val q = ProcessingQualityGuard.compare(oPcm.pcm16LeToShortArray(), cPcm.pcm16LeToShortArray())
-            if (!q.pass) {
-                val issues = q.issues
-                val needDry = issues.any {
-                    it == "hollow_risk_zero" || it == "peak_collapsed" || it == "heavy_rms_drop"
-                }
-                if (needDry) {
-                    val dry = if ("heavy_rms_drop" in issues) 0.14f else 0.09f
-                    applyDryMixFromOriginal(refWav, cleanedWav, dry)
-                }
-                if ("output_very_quiet" in issues) {
-                    applyMinLoudnessFloor(cleanedWav, minRmsDbfs = -39f, maxBoostDb = 16f)
-                }
-                Log.i(TAG, "Extract tuning applied issues=$issues")
-            }
-        } finally {
-            try {
-                refWav.delete()
-            } catch (_: Exception) {
-            }
-        }
     }
 
     private fun downloadFromUrl(url: String, outputFile: File) {
@@ -972,16 +964,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun modeForPhase2Flow(flow: ProcessingFlow, preset: CleaningPreset): String {
-        val preferred = cloudModeForPresetWithFallback(preset)
-        if (flow != ProcessingFlow.EXTRACT_VOICE) return preferred
-        // Extract path sounds more natural with a milder mode.
-        return when {
-            preferred == "pro" || preferred == "studio" -> {
-                if (serverAvailableModes.contains("standard")) "standard" else preferred
-            }
-            else -> preferred
-        }
+    private fun modeForPhase2Flow(preset: CleaningPreset): String {
+        return cloudModeForPresetWithFallback(preset)
     }
 
     private fun cloudModeAvailabilityNote(): String? {
@@ -1041,8 +1025,7 @@ class MainActivity : ComponentActivity() {
         when (processingFlow) {
             ProcessingFlow.CLEAN -> "Clean Audio"
             ProcessingFlow.VIDEO_PROCESS -> "Process Video"
-            ProcessingFlow.EXTRACT_VOICE -> "Extract Voice"
-            ProcessingFlow.ADD_BACKGROUND -> "Mix Background"
+            ProcessingFlow.ADD_BACKGROUND -> "Apply vibe"
             ProcessingFlow.REEL_MODE -> "Make Reel"
         }
 
@@ -1050,9 +1033,8 @@ class MainActivity : ComponentActivity() {
         when (processingFlow) {
             ProcessingFlow.CLEAN -> "Noise reduce + enhance (cloud or local)."
             ProcessingFlow.VIDEO_PROCESS -> "Clean the audio track and remux to video (server job)."
-            ProcessingFlow.EXTRACT_VOICE -> "Demucs-style vocal separation (async job)."
-            ProcessingFlow.ADD_BACKGROUND -> "Mix voice with the background you selected below."
-            ProcessingFlow.REEL_MODE -> "Reel pipeline: clean → optional background (server) → loudness. Export when server adds video step."
+            ProcessingFlow.ADD_BACKGROUND -> "Mix voice with the vibe you pick below."
+            ProcessingFlow.REEL_MODE -> "Reel pipeline: clean → vibe (server) → loudness. Video export when server is ready."
         }
 
     private fun processingDialogTitle(): String =
@@ -1494,7 +1476,6 @@ class MainActivity : ComponentActivity() {
             val mode = when (processingFlow) {
                 ProcessingFlow.REEL_MODE -> "reel"
                 ProcessingFlow.CLEAN -> "clean"
-                ProcessingFlow.EXTRACT_VOICE -> "extract_voice"
                 ProcessingFlow.ADD_BACKGROUND -> "add_background"
                 ProcessingFlow.VIDEO_PROCESS -> "video_process"
             }

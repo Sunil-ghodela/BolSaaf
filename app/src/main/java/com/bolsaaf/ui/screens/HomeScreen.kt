@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bolsaaf.ui.VibeUi
 import com.bolsaaf.audio.AdaptiveAudioAnalyzer
 import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.audio.WavPreview
@@ -109,7 +110,6 @@ fun HomeScreen(
     processingModes: List<String> = listOf(
         "Make Reel ★",
         "Quick clean",
-        "Extract",
         "BG mix",
         "Video"
     ),
@@ -258,6 +258,20 @@ fun HomeScreen(
                     onModeSelected = onProcessingModeChange
                 )
 
+                if (selectedProcessingModeIndex == 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "✨ 1 tap → reel ready",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = AccentCyan,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
                     onClick = onProminentReelClick,
@@ -281,12 +295,25 @@ fun HomeScreen(
                 if (showBackgroundControls) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Background",
+                        text = "Choose Vibe 🌊",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = TextSecondary,
                         modifier = Modifier.padding(horizontal = 32.dp)
                     )
+                    if (!adaptiveAnalysisLoading && adaptiveProfile != null) {
+                        val vibeHint = VibeUi.suggestedVibeLine(adaptiveProfile)
+                        if (vibeHint != null) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = vibeHint,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = AccentGreen,
+                                modifier = Modifier.padding(horizontal = 32.dp)
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(6.dp))
                     if (backgroundLabels.isNotEmpty()) {
                         ModeSelector(
@@ -296,7 +323,7 @@ fun HomeScreen(
                         )
                     } else {
                         Text(
-                            text = "Loading backgrounds…",
+                            text = "Loading vibes…",
                             fontSize = 12.sp,
                             color = Color(0xFFFFA726),
                             modifier = Modifier.padding(horizontal = 32.dp)
@@ -304,7 +331,7 @@ fun HomeScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Background volume  ${"%.0f".format(bgMixVolume * 100f)}%",
+                        text = "Vibe intensity  ${"%.0f".format(bgMixVolume * 100f)}%",
                         fontSize = 12.sp,
                         color = TextSecondary,
                         modifier = Modifier.padding(horizontal = 32.dp)
@@ -631,7 +658,7 @@ fun HeroCleanPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Studio-grade clean",
+                        text = "🎧 Reel ready voice",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color.White
@@ -653,7 +680,7 @@ fun HeroCleanPanel(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "Low noise · balanced power · ready for reels",
+                    text = "Clean • Balanced • Natural",
                     fontSize = 14.sp,
                     color = Color.White.copy(alpha = 0.9f)
                 )
@@ -1223,17 +1250,18 @@ fun BottomNavBar(
         ) {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 NavItem(
                     icon = Icons.Filled.Home,
-                    label = "Cleaner",
+                    label = "Home",
                     isSelected = selectedTab == 0,
                     onClick = { onTabSelected(0) }
                 )
                 NavItem(
-                    icon = Icons.Default.PlayArrow,  // Using PlayArrow as Mic alternative
+                    icon = Icons.Default.PlayArrow,
                     label = "Live",
                     isSelected = selectedTab == 1,
                     onClick = { onTabSelected(1) }
@@ -1275,7 +1303,7 @@ fun NavItem(
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             label,
-            fontSize = 11.sp,
+            fontSize = 10.sp,
             color = if (isSelected) Color(0xFF00E676) else Color(0xFF666666),
             fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
         )

@@ -63,6 +63,38 @@ class VoiceApiPhase2Client(
         )
     }
 
+    /**
+     * Async job: server downloads audio from a public URL (YouTube / Reels / TikTok),
+     * then runs the same vocal extract + clean pipeline. Requires matching Django route.
+     */
+    fun extractVoiceFromUrl(sourceUrl: String, mode: String = "studio"): VoiceJobAccepted {
+        val url = baseUrl.trimEnd('/') + "/extract_from_url/"
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+        conn.doOutput = true
+        conn.connectTimeout = CONNECT_TIMEOUT_MS
+        conn.readTimeout = READ_TIMEOUT_MS
+        val payload = JSONObject()
+            .put("source_url", sourceUrl.trim())
+            .put("mode", mode)
+            .toString()
+        conn.outputStream.use { out ->
+            out.write(payload.toByteArray(Charsets.UTF_8))
+        }
+        val code = conn.responseCode
+        val stream = if (code in 200..299) conn.inputStream else conn.errorStream ?: conn.inputStream
+        val body = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        Log.d(TAG, "extract_from_url code=$code body=${body.take(400)}")
+        if (code !in 200..299) throw VoiceCleaningException("extract_from_url failed: HTTP $code $body")
+        val j = JSONObject(body)
+        return VoiceJobAccepted(
+            jobId = j.optInt("job_id"),
+            jobType = j.optString("job_type", "extract_from_url"),
+            message = j.optString("message", "Job accepted")
+        )
+    }
+
     fun addBackground(
         file: File,
         backgroundId: String,

@@ -1,49 +1,65 @@
 package com.bolsaaf.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bolsaaf.audio.CleaningPreset
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 @Composable
 fun ProfileScreen(
     selectedTab: Int = 3,
     onTabSelected: (Int) -> Unit = {},
     cleaningPreset: CleaningPreset = CleaningPreset.NORMAL,
-    freeMinutesLeft: Int = 2,
+    freeMinutesLeft: Int = 8,
+    freeQuotaMinutes: Int = 8,
     completedCleans: Int = 0,
+    totalProcessedMinutes: Float = 0f,
+    dayStreak: Int = 0,
+    displayName: String = "Creator",
+    userHandle: String = "@bolsaaf",
+    showProMemberBadge: Boolean = false,
     onUpgrade: () -> Unit = {},
-    onShareRecord: () -> Unit = {}
+    onOpenSettings: () -> Unit = {}
 ) {
+    val scroll = rememberScrollState()
+    val renewalLabel = remember {
+        val c = Calendar.getInstance()
+        c.add(Calendar.MONTH, 1)
+        SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(c.time)
+    }
+    val usedFree = (freeQuotaMinutes - freeMinutesLeft).coerceIn(0, freeQuotaMinutes)
+    val usedFraction =
+        if (freeQuotaMinutes <= 0) 0f else usedFree / freeQuotaMinutes.toFloat()
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -52,146 +68,272 @@ fun ProfileScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(scroll)
                 .padding(bottom = 100.dp)
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
-            Surface(
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .height(220.dp)
-                    .shadow(8.dp, RoundedCornerShape(28.dp)),
-                shape = RoundedCornerShape(28.dp),
-                color = Color.Transparent
+                    .padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(
-                            brush = Brush.linearGradient(
-                                colors = listOf(AccentPurple, AccentGreen, AccentCyan)
-                            )
-                        )
-                        .padding(24.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.SpaceBetween
+                Text(
+                    text = "Profile",
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        Icons.Filled.Settings,
+                        contentDescription = "Settings",
+                        tint = TextSecondary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Identity card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .shadow(10.dp, RoundedCornerShape(24.dp)),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF121A2A)),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Column {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .border(
+                                    width = 2.dp,
+                                    brush = Brush.linearGradient(
+                                        listOf(AccentPurple, AccentGreen, AccentCyan)
+                                    ),
+                                    shape = CircleShape
+                                )
+                                .padding(3.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF1E2A45)),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                text = "Studio profile",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.ExtraBold,
+                                text = displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "B",
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Track your cleans, presets, and boosts",
+                                text = displayName,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = userHandle,
                                 fontSize = 14.sp,
-                                color = Color.White.copy(alpha = 0.85f)
+                                color = TextSecondary
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(
+                                        brush = Brush.horizontalGradient(
+                                            listOf(Color(0xFFFFB74D), Color(0xFFFF7043))
+                                        )
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Star,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = if (showProMemberBadge) "Pro Member" else "Free plan",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        ProfileStatBlock(
+                            value = completedCleans.toString(),
+                            label = "Files cleaned",
+                            valueColor = AccentPurple
+                        )
+                        ProfileStatBlock(
+                            value = formatAudioHours(totalProcessedMinutes),
+                            label = "Audio processed",
+                            valueColor = AccentCyan
+                        )
+                        ProfileStatBlock(
+                            value = dayStreak.toString(),
+                            label = "Day streak",
+                            valueColor = Color(0xFFFF80AB)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Plan / quota card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0C1424)),
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (showProMemberBadge) "Pro Plan" else "Free plan",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0x33FF9800)
+                        ) {
+                            Text(
+                                text = "Active",
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFB74D)
                             )
                         }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Renews on $renewalLabel",
+                        fontSize = 12.sp,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Free minutes left", fontSize = 13.sp, color = TextSecondary)
+                        Text(
+                            text = "$freeMinutesLeft / $freeQuotaMinutes",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFF1E2A40))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(usedFraction.coerceIn(0f, 1f).coerceAtLeast(0.04f))
+                                .background(
+                                    brush = Brush.horizontalGradient(
+                                        listOf(Color(0xFFE53935), Color(0xFF42A5F5))
+                                    )
+                                )
+                        )
+                    }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = onUpgrade,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                        contentPadding = PaddingValues(),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    brush = Brush.horizontalGradient(
+                                        listOf(Color(0xFFFF9800), Color(0xFFFFCA28))
+                                    ),
+                                    shape = RoundedCornerShape(14.dp)
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Column {
-                                Text(
-                                    text = "${completedCleans} sessions",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = "Free ${freeMinutesLeft} min left",
-                                    fontSize = 12.sp,
-                                    color = Color.White.copy(alpha = 0.8f)
-                                )
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = Color.Black.copy(alpha = 0.2f)
-                            ) {
-                                Text(
-                                    text = cleaningPreset.label,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
+                            Text(
+                                text = "Upgrade plan",
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            Row(
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF121A2A)),
+                shape = RoundedCornerShape(18.dp)
             ) {
-                ProfileStatCard(
-                    modifier = Modifier.weight(1f),
-                    title = "Completed cleans",
-                    value = "$completedCleans",
-                    description = "Studio-ready",
-                    icon = Icons.Filled.Star
-                )
-                ProfileStatCard(
-                    modifier = Modifier.weight(1f),
-                    title = "Preset locked",
-                    value = cleaningPreset.label,
-                    description = "Auto-adjusted",
-                    icon = Icons.Filled.Lock
-                )
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        text = "💎 Real insight",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Reel mode bundles clean + vibe + loudness in one flow. Preset: ${cleaningPreset.label} — tune from Home when you want a calmer or stronger pass.",
+                        fontSize = 13.sp,
+                        color = TextSecondary,
+                        lineHeight = 18.sp
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
-
-            ProfilePlanCard(onUpgrade = onUpgrade)
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                Text(
-                    text = "Insights",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                ProfileInsightRow(
-                    icon = Icons.Filled.CheckCircle,
-                    title = "Adaptive preset live",
-                    subtitle = "Your voice is now mapped to ${cleaningPreset.label} automatically"
-                )
-                Divider(
-                    modifier = Modifier.padding(vertical = 10.dp),
-                    color = Color.White.copy(alpha = 0.08f)
-                )
-                ProfileInsightRow(
-                    icon = Icons.Filled.Info,
-                    title = "Cloud sync",
-                    subtitle = "Last backup 12 hours ago · share results anytime"
-                )
-                Divider(
-                    modifier = Modifier.padding(vertical = 10.dp),
-                    color = Color.White.copy(alpha = 0.08f)
-                )
-                ProfileInsightRow(
-                    icon = Icons.Filled.Share,
-                    title = "Shareable beats",
-                    subtitle = "Tap to share your cleaned tracks in one tap"
-                )
-                Spacer(modifier = Modifier.height(60.dp))
-            }
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
         BottomNavBar(
@@ -203,121 +345,26 @@ fun ProfileScreen(
 }
 
 @Composable
-fun ProfileStatCard(
-    modifier: Modifier = Modifier,
-    title: String,
-    value: String,
-    description: String,
-    icon: ImageVector
-) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF182131)
-        ),
-        shape = RoundedCornerShape(18.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(AccentCyan.copy(alpha = 0.25f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(imageVector = icon, contentDescription = null, tint = AccentCyan)
-                }
-                Text(
-                    text = title,
-                    fontSize = 12.sp,
-                    color = TextSecondary
-                )
-            }
-            Text(
-                text = value,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Text(
-                text = description,
-                fontSize = 11.sp,
-                color = TextSecondary
-            )
-        }
+private fun ProfileStatBlock(value: String, label: String, valueColor: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = valueColor
+        )
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = TextSecondary,
+            modifier = Modifier.padding(top = 4.dp)
+        )
     }
 }
 
-@Composable
-fun ProfilePlanCard(onUpgrade: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF060F19)
-        ),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                text = "Level up to Pro",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Unlock long sessions, priority reels, and background mixes.",
-                fontSize = 12.sp,
-                color = TextSecondary
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = onUpgrade,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(text = "Upgrade & unlock more", color = Color.Black, fontWeight = FontWeight.Bold)
-            }
-        }
-    }
-}
-
-@Composable
-fun ProfileInsightRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.05f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(imageVector = icon, contentDescription = null, tint = AccentGreen)
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column {
-            Text(text = title, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color.White)
-            Text(text = subtitle, fontSize = 12.sp, color = TextSecondary)
-        }
-    }
+private fun formatAudioHours(minutes: Float): String {
+    if (minutes <= 0f) return "0m"
+    val h = (minutes / 60f).toInt()
+    val m = (minutes % 60f).toInt().coerceAtLeast(0)
+    return if (h > 0) "${h}h ${m}m" else "${m}m"
 }
