@@ -88,6 +88,8 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.bolsaaf.ui.animations.AnimatedListItem
+import com.bolsaaf.ui.animations.AnimatedSlideIn
 
 data class SaveInfo(
     val cleanedFileName: String,
@@ -388,30 +390,37 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
             
-            items(audioPairs.take(3)) { pair ->
-                ComparisonCard(
-                    pair = pair,
-                    recordingsDir = recordingsDir,
-                    currentlyPlaying = currentlyPlaying,
-                    onPlayOriginal = { 
-                        if (currentlyPlaying == pair.originalFile) {
-                            onStopFile()
-                        } else {
-                            onPlayFile(pair.originalFile)
-                        }
-                    },
-                    onPlayCleaned = { 
-                        if (currentlyPlaying == pair.cleanedFile) {
-                            onStopFile()
-                        } else {
-                            onPlayFile(pair.cleanedFile)
-                        }
-                    },
-                    onRemove = { onRemovePair(pair.timestamp) },
-                    onShare = { onShareFile(pair.cleanedFile) },
-                    onDownload = { onDownloadFile(pair.cleanedFile) },
-                    onFeedback = { feedbackPair = pair }
-                )
+            items(audioPairs.take(3), key = { it.timestamp }) { pair ->
+                AnimatedListItem(
+                    index = audioPairs.indexOf(pair),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    ComparisonCard(
+                        pair = pair,
+                        recordingsDir = recordingsDir,
+                        currentlyPlaying = currentlyPlaying,
+                        onPlayOriginal = { 
+                            if (currentlyPlaying == pair.originalFile) {
+                                onStopFile()
+                            } else {
+                                onPlayFile(pair.originalFile)
+                            }
+                        },
+                        onPlayCleaned = { 
+                            if (currentlyPlaying == pair.cleanedFile) {
+                                onStopFile()
+                            } else {
+                                onPlayFile(pair.cleanedFile)
+                            }
+                        },
+                        onRemove = { onRemovePair(pair.timestamp) },
+                        onShare = { onShareFile(pair.cleanedFile) },
+                        onDownload = { onDownloadFile(pair.cleanedFile) },
+                        onFeedback = { feedbackPair = pair }
+                    )
+                }
             }
             
             item {
