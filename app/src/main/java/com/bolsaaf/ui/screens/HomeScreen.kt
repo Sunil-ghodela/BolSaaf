@@ -395,7 +395,7 @@ fun HomeScreen(
                     index = audioPairs.indexOf(pair),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .padding(horizontal = 12.dp, vertical = 12.dp)
                 ) {
                     ComparisonCard(
                         pair = pair,
@@ -769,11 +769,22 @@ fun QuickActionCard(
     onClick: () -> Unit = {}
 ) {
     val iconToUse = imageVector ?: icon ?: Icons.Default.Info
-    
+    val iconBg = when {
+        badge == "PRO" -> Color(0xFFFFF3E0)
+        isLoading -> SurfaceStripe
+        else -> ThemeBlue.copy(alpha = 0.1f)
+    }
+    val iconTint = when {
+        badge == "PRO" -> Color(0xFFFF8F00)
+        isLoading -> ThemeBlue
+        else -> ThemeRed
+    }
+
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(PrimaryGradient)
+            .background(BackgroundCard)
+            .border(1.dp, SliderTrackStrong.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
             .clickable(enabled = !isLoading) { onClick() }
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -782,27 +793,20 @@ fun QuickActionCard(
             modifier = Modifier
                 .size(48.dp)
                 .clip(CircleShape)
-                .background(
-                    if (badge == "PRO") 
-                        Brush.linearGradient(listOf(Color(0xFFFFB300), Color(0xFFFF8F00)))
-                    else if (isLoading)
-                        Brush.linearGradient(listOf(AccentCyan, AccentGreen))
-                    else
-                        Brush.linearGradient(listOf(ThemeRed, ThemeBlue))
-                ),
+                .background(iconBg),
             contentAlignment = Alignment.Center
         ) {
             if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
-                    color = Color.Black,
+                    color = ThemeBlue,
                     strokeWidth = 2.dp
                 )
             } else {
                 Icon(
                     imageVector = iconToUse,
                     contentDescription = null,
-                    tint = Color.Black,
+                    tint = iconTint,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -812,12 +816,12 @@ fun QuickActionCard(
             title,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
-            color = if (isLoading) AccentCyan else Color.White
+            color = if (isLoading) ThemeBlue else TextPrimary
         )
         Text(
             subtitle,
             fontSize = 11.sp,
-            color = if (isLoading) AccentGreen else Color(0xFF888888),
+            color = TextSecondary,
             textAlign = TextAlign.Center
         )
     }
@@ -828,8 +832,8 @@ fun StatsSection() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         StatCard(
             modifier = Modifier.weight(1f),
@@ -862,13 +866,13 @@ fun StatCard(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(PrimaryGradient)
+            .background(BackgroundCard)
             .border(
                 width = 1.dp,
-                color = Color.White.copy(alpha = 0.2f),
+                color = SliderTrackStrong.copy(alpha = 0.45f),
                 shape = RoundedCornerShape(14.dp)
             )
-            .padding(12.dp),
+            .padding(horizontal = 14.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
@@ -877,17 +881,18 @@ fun StatCard(
             tint = ThemeBlue,
             modifier = Modifier.size(20.dp)
         )
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         Text(
             value,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = TextPrimary
         )
         Text(
             label,
             fontSize = 10.sp,
-            color = Color(0xFF888888)
+            color = TextSecondary,
+            textAlign = TextAlign.Center
         )
     }
 }
@@ -988,33 +993,23 @@ fun ComparisonCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.Transparent
-        ),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        colors = CardDefaults.cardColors(containerColor = BackgroundCard),
         shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = PrimaryGradient,
-                    shape = RoundedCornerShape(24.dp)
-                )
-                .border(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(24.dp)
-                )
-                .padding(1.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(Brush.horizontalGradient(colors = listOf(ThemeRed, ThemeBlue)))
+            )
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(PanelOverlay)
-                    .padding(18.dp)
+                    .border(1.dp, SliderTrackStrong.copy(alpha = 0.35f), RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+                    .padding(horizontal = 18.dp, vertical = 18.dp)
             ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1250,21 +1245,21 @@ fun BottomNavBar(
     onTabSelected: (Int) -> Unit = {}
 ) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = Color.Transparent
+        modifier = modifier
+            .fillMaxWidth()
+            .border(1.dp, SliderTrackStrong.copy(alpha = 0.35f), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
+        color = BackgroundCard,
+        shadowElevation = 12.dp,
+        tonalElevation = 2.dp,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                .background(PrimaryGradient)
-                .padding(vertical = 12.dp, horizontal = 16.dp)
+                .fillMaxWidth()
+                .padding(vertical = 14.dp, horizontal = 16.dp)
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
                 NavItem(
                     icon = Icons.Filled.Home,
                     label = "Home",
@@ -1289,7 +1284,6 @@ fun BottomNavBar(
                     isSelected = selectedTab == 3,
                     onClick = { onTabSelected(3) }
                 )
-            }
         }
     }
 }

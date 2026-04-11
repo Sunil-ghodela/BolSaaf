@@ -1,6 +1,6 @@
 # BolSaaf Phase Progress Tracker
 
-Last updated: 2026-04-10
+Last updated: 2026-04-11
 
 ## Product direction (locked intent)
 
@@ -8,14 +8,14 @@ Last updated: 2026-04-10
 - **Current phase:** build is strong; focus is **consistency, experience, quality**, and **server reel finalization** (incl. −16 LUFS target, presets: Podcast / Rain / Cafe / Viral — product names; implementation mostly backend + tuning).
 - **Benchmark:** compulsory discipline — use `data/BENCHMARK_REEL_5TAKE_TEMPLATE.md` (5 real takes + table + listening notes).
 
-## Overall completion (~84%)
+## Overall completion (~85%)
 
 | Pillar | Status |
 |--------|--------|
 | Core engine | Done |
 | Studio engine | Very strong (reel chain service + endpoints validated) |
 | Smart engine | Stronger (adaptive + feedback-driven extract tuning) |
-| UX | Good (feedback collection simplified for testers) |
+| UX | Good → **refreshed** (light yellow + red/blue brand, 4-tab nav, flatter cards/nav) |
 | Advanced | Growing → retry + dry-mix + loudness floor + feedback telemetry |
 
 **Total roadmap completion (weighted): ~84%**
@@ -84,16 +84,17 @@ Last updated: 2026-04-10
 
 ---
 
-## Phase 4 — User Experience (~78% Complete)
+## Phase 4 — User Experience (~82% Complete)
 
-- **Primary story:** **Make Reel ★** first chip; default `ProcessingFlow` = **REEL**; full-width **Make Reel — recommended** button (same as selecting reel).
-- Flow chips compacted for mobile fit: **Reel ★ / Quick / Extract / BG / Video** + horizontal-scroll mode selector to avoid wrapping.
-- Output card now includes **Feedback** action (Home/History/Live).
-- Feedback dialog simplified for testers: **“Voice clear hui?” Yes/No**, and issue chips only when No.
-- **Reel + BG mix:** background picker + volume shown for **Reel** and **BG mix**; reel API gets `bg` + `bg_volume`.
-- Subtitle: **“Reel & voice studio”** under BolSaaf header.
+- **Primary story:** **Make Reel ★** first chip; default `ProcessingFlow` = **REEL**; full-width **Make Reel — recommended** (gradient CTA) + **Hero “Clean Audio / Video”** card (orange→red CTA, white card shell).
+- **Home flow chips (4):** **Reel ★ / Quick / BG / Video** — horizontal-scroll `ModeSelector`; **Extract** removed from chip row (dedicated Extract tab also removed; server `extract_voice` / `extract_from_url` deferred in product until YouTube/cookies path is stable).
+- **Navigation:** **Home · Live · History · Profile** (4 tabs). Bottom bar is **solid** (no full-width gradient) for readability; brand gradient kept on small accents (e.g. active chip, top strip on recent-clean cards).
+- **Theme (2026-04-11):** `BolSaafPalette` + light `MaterialTheme` — **#FFFBEB** canvas, white cards, brand **#E34C52 → #537FE7**; header matches refs (**rounded-square logo**, **“Audio & Video Studio”**, red **min free** pill). **Upload / Batch / Settings** quick cards and **stats row** are flat white + border (no card gradients). **Recent cleans** `ComparisonCard`: more padding + **thin horizontal red→blue strip** on top (no gradient ring).
+- Output card includes **Feedback** (Home/History/Live).
+- Feedback dialog: **“Voice clear hui?” Yes/No**; issue chips when No.
+- **Reel + BG mix:** background picker + volume for **Reel** and **BG**; reel API `bg` + `bg_volume`.
 - Phase-2 async: submit → poll → download; **Video** = MP4, share MIME correct.
-- Remaining: async progress UI; Live tab parity; reel preview when server exports video.
+- **Remaining:** async stage-wise progress UI; Live parity polish; reel **video** preview when server exports; optional restore **Extract** (file or URL) behind stable `yt-dlp`/cookies.
 
 ---
 
@@ -104,8 +105,8 @@ Last updated: 2026-04-10
 - **`ProcessingQualityGuard`** on single-chunk cloud clean; on fail → automatic retry with milder API mode (`pro→studio→standard→basic`).
 - **Dry-mix guard live:** applies adaptive `dryMix` when hollow risk is detected.
 - **Audibility floor live:** if still `output_very_quiet`, apply post-gain loudness floor (adaptive target).
-- **Extract post-tuning guard live:** after extract output download, compare original vs cleaned and apply mild dry-mix/loudness fix when guard issues are detected.
-- **Extract mode softening:** extract flow now prefers milder cloud mode (standard fallback) to reduce robotic artifacts.
+- **Extract post-tuning (server / when used):** compare original vs cleaned and mild dry-mix/loudness fix when guard issues — **Android app no longer runs file `extract_voice` flow in UI** (tab/chip removed); pipeline still on API for future re-enable.
+- **Extract mode softening:** when extract is used, milder cloud mode preference remains a server/client contract option.
 - **Feedback telemetry pipeline live:** app → `POST /voice/feedback/` with auto metadata + quick human label.
 
 ### Plan (next)
@@ -120,11 +121,11 @@ Last updated: 2026-04-10
 
 ## Next Priority (Execution Order)
 
-1. **Extract quality sprint:** reduce artifacts/smoothness issues using latest feedback batches (target artifacts < 15% in extract mode).
-2. **Reel server finalization:** clean/extract + background + loudness (−16 LUFS) + video export in one stable reel pipeline.
+1. **Reel server finalization:** clean/extract + background + loudness (−16 LUFS) + **video export** in one stable reel pipeline.
+2. **UX status clarity:** stage-wise progress (`Analyzing → Cleaning → Mixing → Finalizing`) on Home processing dialog + upload path.
 3. **Adaptive tuning pass:** calibrate thresholds using daily 5 real takes (`data/BENCHMARK_REEL_5TAKE_TEMPLATE.md` + dated logs).
-4. **Quality robustness:** keep retry/dry-mix/floor, then add VAD-assisted decisions + optional dry/wet blend % tuning.
-5. **UX status clarity:** stage-wise progress text (`Analyzing → Cleaning → Mixing → Finalizing`) for trust.
+4. **Quality robustness:** keep retry/dry-mix/floor; VAD-assisted decisions + optional dry/wet blend % tuning.
+5. **Extract / URL (when prioritized):** server `yt-dlp` + cookies (`YT_DLP_COOKIES`); restore app chip or tab; doc: `data/API_EXTRACT_FROM_URL.md`, deploy script `scripts/deploy_voice_url_extract/url_extract_service.py`.
 
 
 
