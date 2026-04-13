@@ -42,7 +42,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -82,14 +83,16 @@ import com.bolsaaf.ui.theme.TitleVideoAccent
 import com.bolsaaf.audio.AdaptiveAudioAnalyzer
 import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.audio.WavPreview
+import com.bolsaaf.ui.animation.MD3Motion
+import com.bolsaaf.ui.animation.slideInFromStart
+import com.bolsaaf.ui.animation.slideInFromBottom
+import com.bolsaaf.ui.animation.slideOutToBottom
 import java.io.File
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import com.bolsaaf.ui.animations.AnimatedListItem
-import com.bolsaaf.ui.animations.AnimatedSlideIn
 
 data class SaveInfo(
     val cleanedFileName: String,
@@ -157,7 +160,7 @@ fun HomeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Animated gradient background
         Box(
@@ -166,15 +169,15 @@ fun HomeScreen(
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            BackgroundDark,
-                            BackgroundCard,
-                            BackgroundDark
+                            MaterialTheme.colorScheme.background,
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.background
                         )
                     )
                 )
         )
         
-        // Purple accent glow at top
+        // Primary accent glow at top
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -182,7 +185,7 @@ fun HomeScreen(
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            AccentPurple.copy(alpha = 0.15f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
                             Color.Transparent
                         ),
                         center = Offset(0.5f, 0f),
@@ -191,7 +194,7 @@ fun HomeScreen(
                 )
         )
         
-        // Cyan accent glow at bottom
+        // Secondary accent glow at bottom
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -200,7 +203,7 @@ fun HomeScreen(
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            AccentCyan.copy(alpha = 0.1f),
+                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.06f),
                             Color.Transparent
                         ),
                         center = Offset(0.5f, 1f),
@@ -239,8 +242,8 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = modeAvailabilityNote,
-                        fontSize = 12.sp,
-                        color = Color(0xFFFFA726)
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
 
@@ -266,9 +269,9 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "✨ 1 tap → reel ready",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = AccentCyan,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -282,18 +285,17 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp)
-                        .height(52.dp)
-                        .background(PrimaryGradient, RoundedCornerShape(14.dp)),
-                    shape = RoundedCornerShape(14.dp),
+                        .height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = Color.White
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
                     Text(
                         text = "Make Reel — recommended",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
 
@@ -374,15 +376,15 @@ fun HomeScreen(
                 ) {
                     Text(
                         "Recent Cleans",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontWeight = FontWeight.SemiBold
                     )
                     TextButton(onClick = onGoToHistory) {
                         Text(
                             "See All →",
-                            color = ThemeRed,
-                            fontSize = 14.sp
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -391,11 +393,16 @@ fun HomeScreen(
             }
             
             items(audioPairs.take(3), key = { it.timestamp }) { pair ->
-                AnimatedListItem(
-                    index = audioPairs.indexOf(pair),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                val index = audioPairs.indexOf(pair)
+                AnimatedVisibility(
+                    visible = true,
+                    enter = slideInFromBottom() + fadeIn(
+                        animationSpec = tween(
+                            durationMillis = MD3Motion.StandardDurationMs,
+                            delayMillis = index * 100
+                        )
+                    ),
+                    exit = slideOutToBottom() + fadeOut()
                 ) {
                     ComparisonCard(
                         pair = pair,
@@ -534,75 +541,79 @@ fun GlassmorphicHeader(
     freeMinutesLeft: Int,
     onGoToHistory: () -> Unit
 ) {
-    Row(
+    ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.55f))
-            .border(
-                width = 1.dp,
-                color = SliderTrackStrong.copy(alpha = 0.7f),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        )
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Brush.linearGradient(colors = listOf(ThemeRed, ThemeBlue))),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Filled.Add,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    "BolSaaf",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
-                Text(
-                    "Audio & Video Studio",
-                    fontSize = 12.sp,
-                    color = TextSecondary
-                )
-            }
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Surface(
-                color = Color.White,
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.border(1.dp, ThemeRed.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Box(
+                    Icon(
+                        Icons.Filled.Add,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(ThemeRed)
+                            .size(40.dp)
+                            .padding(8.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
                     Text(
-                        "$freeMinutesLeft min free",
-                        fontSize = 12.sp,
-                        color = ThemeRed,
-                        fontWeight = FontWeight.SemiBold
+                        "BolSaaf",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
                     )
+                    Text(
+                        "Audio & Video Studio",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "$freeMinutesLeft min free",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }
@@ -611,38 +622,56 @@ fun GlassmorphicHeader(
 
 @Composable
 fun AnimatedTitle() {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            "Studio jaisi awaaz",
-            fontSize = 32.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = TextPrimary,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth()
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(horizontal = 16.dp)
+    ) {
+        AnimatedVisibility(
+            visible = true,
+            enter = slideInFromStart() + fadeIn(
+                animationSpec = tween(MD3Motion.EmphasizedDurationMs)
+            ),
+            exit = slideOutToBottom() + fadeOut()
         ) {
             Text(
-                text = "Video",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = TitleVideoAccent
+                "Studio jaisi awaaz",
+                style = MaterialTheme.typography.displaySmall,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
             )
-            Text(
-                text = " + ",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = TextSecondary
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        AnimatedVisibility(
+            visible = true,
+            enter = slideInFromStart() + fadeIn(
+                animationSpec = tween(MD3Motion.StandardDurationMs, delayMillis = 100)
             )
-            Text(
-                text = "Audio dono",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold,
-                style = TextStyle(brush = SubtitleBluePurple)
-            )
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Video",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = " + ",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Audio dono",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
         }
     }
 }
