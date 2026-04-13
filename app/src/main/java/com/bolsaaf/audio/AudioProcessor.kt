@@ -187,31 +187,7 @@ class AudioProcessor(private val context: Context) {
     }
 
     private fun resampleTo48kMonoS16(interleaved: ShortArray, srcRate: Int, channels: Int): ShortArray {
-        val mono = if (channels == 1) {
-            interleaved
-        } else {
-            val frames = interleaved.size / channels
-            ShortArray(frames) { fi ->
-                var sum = 0L
-                for (c in 0 until channels) {
-                    sum += interleaved[fi * channels + c].toInt()
-                }
-                (sum / channels).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
-            }
-        }
-        if (srcRate == SAMPLE_RATE) return mono
-        if (srcRate <= 0) return mono
-        val srcLen = mono.size
-        val dstLen = ((srcLen.toLong() * SAMPLE_RATE + srcRate / 2) / srcRate).toInt().coerceAtLeast(1)
-        return ShortArray(dstLen) { di ->
-            val srcPos = (di.toDouble() * srcRate) / SAMPLE_RATE
-            val i0 = srcPos.toInt().coerceIn(0, srcLen - 1)
-            val i1 = (i0 + 1).coerceAtMost(srcLen - 1)
-            val frac = (srcPos - i0).toFloat()
-            val f0 = mono[i0].toFloat()
-            val f1 = mono[i1].toFloat()
-            (f0 + (f1 - f0) * frac).roundToInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
-        }
+        return PcmResample.resampleInterleavedTo48kMono(interleaved, srcRate, channels)
     }
 
     private fun decodeMediaCodecTo48kMonoS16(uri: Uri): ShortArray {
@@ -344,7 +320,9 @@ class AudioProcessor(private val context: Context) {
             val offset = i * frameSize
             val frame = pcmData.copyOfRange(offset, offset + frameSize)
             AudioInputStage.apply(frame, cleaningPreset)
-            rnnoise.processStudio(statePtr, frame)
+            if (isInitialized) {
+                rnnoise.processStudio(statePtr, frame)
+            }
 
             frame.copyInto(outputBuffer, offset)
             progressCallback((i * 100) / numFrames.coerceAtLeast(1))
@@ -353,7 +331,13 @@ class AudioProcessor(private val context: Context) {
         val remaining = pcmData.size % frameSize
         if (remaining > 0) {
             val start = numFrames * frameSize
-            pcmData.copyInto(outputBuffer, start, start, start + remaining)
+            val padded = ShortArray(frameSize)
+            pcmData.copyInto(padded, 0, start, start + remaining)
+            AudioInputStage.apply(padded, cleaningPreset)
+            if (isInitialized) {
+                rnnoise.processStudio(statePtr, padded)
+            }
+            padded.copyInto(outputBuffer, start, 0, remaining)
         }
 
         progressCallback(100)

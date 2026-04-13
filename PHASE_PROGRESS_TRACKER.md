@@ -27,6 +27,7 @@ Last updated: 2026-04-11
 ## Phase 1 — Core Engine (100% Complete)
 
 - RNNoise cleaning path
+- **2026-04-11 — Voice-clean pipeline hardening (Android):** live mic path now **accumulates PCM**, reads **actual `AudioRecord.sampleRate` (API 23+)**, **resamples to 48 kHz mono** in fixed RNNoise-sized chunks (`PcmResample` + 480-sample frames); file clean tail frames are **zero-padded** through RNNoise instead of bypassing. Helpers: `PcmResample.kt`, `PcmFormat.kt`. Follow-ups: loudness (−16 LUFS), Demucs dry-mix tuning (server/product).
 - DSP path
 - Django API + cloud integration
 - Mobile app integration
@@ -124,7 +125,7 @@ Last updated: 2026-04-11
 1. **Reel server finalization:** clean/extract + background + loudness (−16 LUFS) + **video export** in one stable reel pipeline.
 2. **UX status clarity:** stage-wise progress (`Analyzing → Cleaning → Mixing → Finalizing`) on Home processing dialog + upload path.
 3. **Adaptive tuning pass:** calibrate thresholds using daily 5 real takes (`data/BENCHMARK_REEL_5TAKE_TEMPLATE.md` + dated logs).
-4. **Quality robustness:** keep retry/dry-mix/floor; VAD-assisted decisions + optional dry/wet blend % tuning.
+4. **Quality robustness:** keep retry/dry-mix/floor; **48 kHz + 480-sample RN alignment on device** (done 2026-04-11); VAD-assisted decisions + optional dry/wet blend % tuning.
 5. **Extract / URL (when prioritized):** server `yt-dlp` + cookies (`YT_DLP_COOKIES`); restore app chip or tab; doc: `data/API_EXTRACT_FROM_URL.md`, deploy script `scripts/deploy_voice_url_extract/url_extract_service.py`.
 
 
