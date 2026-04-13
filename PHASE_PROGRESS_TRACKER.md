@@ -1,6 +1,6 @@
 # BolSaaf Phase Progress Tracker
 
-Last updated: 2026-04-11
+Last updated: 2026-04-13
 
 ## Product direction (locked intent)
 
@@ -140,6 +140,7 @@ Last updated: 2026-04-11
 
 ## Recent validation (server, 2026-04-13)
 
+- **Deploy + restart:** `bash scripts/deploy_extract_voice_tuning.sh root@77.237.234.45` synced `extract_feedback_tuning.py` + `demucs_extract.py`; `deploy_extract_voice_tuning_remote.py` re-run (migrations up-to-date, patches idempotent). **Django `manage.py runserver 0.0.0.0:8000`** restarted under `nohup` for `/var/www/simplelms/backend`; **`GET /voice/health/`** verified **ok** after bounce.
 - **Demucs ↔ DB:** `ExtractVoiceTuningState` (singleton) stores `vocals_dry_ratio`; feedback drives blend strength for extract + reel Demucs paths.
 - SSH `root@77.237.234.45`: `https://shadowselfwork.com/voice/health/` returns **ok** (ffmpeg + DeepFilterNet; job types include reel / video_reel / extract_from_url).
 - **Loudness:** `reel_mode.py` + `video_process.py` use **2-pass `loudnorm`** default **−16 LUFS**; `ffmpeg` lists **EBU R128 loudnorm** filter.
