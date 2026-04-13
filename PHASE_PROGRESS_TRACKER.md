@@ -138,6 +138,14 @@ Last updated: 2026-04-11
   - runs Android unit tests (`:app:testDebugUnitTest`)
   - runs adaptive benchmark scripts and uploads artifact (`data/benchmark_adaptive_batch.json`)
 
+## Recent validation (server, 2026-04-13)
+
+- SSH `root@77.237.234.45`: `https://shadowselfwork.com/voice/health/` returns **ok** (ffmpeg + DeepFilterNet; job types include reel / video_reel / extract_from_url).
+- **Loudness:** `reel_mode.py` + `video_process.py` use **2-pass `loudnorm`** default **−16 LUFS**; `ffmpeg` lists **EBU R128 loudnorm** filter.
+- **yt-dlp:** system `2026.03.17` present; venv has package installed.
+- **Ops:** created `/var/www/simplelms/backend/secrets/` (`700`); appended **commented** `# YT_DLP_COOKIES=...` hint to `.env` (uncomment after uploading Netscape `youtube_cookies.txt`).
+- **Note:** `curl http://127.0.0.1:8000/voice/health/` returns **400** (Host / `ALLOWED_HOSTS`); use public hostname or correct `Host` header for local checks.
+
 ## Recent validation (device)
 
 - Latest runs (`122242`, `122304`) confirm adaptive mode selection (`studio`, `STRONG`, `preGain=4.0`) is firing correctly.
