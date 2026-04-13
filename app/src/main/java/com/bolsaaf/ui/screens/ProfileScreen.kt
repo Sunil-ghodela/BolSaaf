@@ -10,14 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -30,17 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bolsaaf.audio.CleaningPreset
-import com.bolsaaf.ui.theme.AccentCyan
-import com.bolsaaf.ui.theme.AccentGreen
-import com.bolsaaf.ui.theme.AccentPurple
-import com.bolsaaf.ui.theme.BackgroundCard
-import com.bolsaaf.ui.theme.BackgroundDark
-import com.bolsaaf.ui.theme.SliderTrack
-import com.bolsaaf.ui.theme.SurfaceStripe
-import com.bolsaaf.ui.theme.TextPrimary
-import com.bolsaaf.ui.theme.TextSecondary
-import com.bolsaaf.ui.theme.ThemeBlue
-import com.bolsaaf.ui.theme.ThemeRed
+import com.bolsaaf.ui.animation.MD3Motion
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -74,7 +57,7 @@ fun ProfileScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Column(
             modifier = Modifier
@@ -94,13 +77,13 @@ fun ProfileScreen(
                     text = "Profile",
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    color = MaterialTheme.colorScheme.onBackground
                 )
                 IconButton(onClick = onOpenSettings) {
                     Icon(
                         Icons.Filled.Settings,
                         contentDescription = "Settings",
-                        tint = TextSecondary
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -113,7 +96,7 @@ fun ProfileScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
                     .shadow(10.dp, RoundedCornerShape(24.dp)),
-                colors = CardDefaults.cardColors(containerColor = SurfaceStripe),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 shape = RoundedCornerShape(24.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
@@ -127,20 +110,20 @@ fun ProfileScreen(
                                 .border(
                                     width = 2.dp,
                                     brush = Brush.linearGradient(
-                                        listOf(AccentPurple, AccentGreen, AccentCyan)
+                                        listOf(MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
                                     ),
                                     shape = CircleShape
                                 )
                                 .padding(3.dp)
                                 .clip(CircleShape)
-                                .background(ThemeBlue.copy(alpha = 0.12f)),
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "B",
                                 fontSize = 28.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = ThemeBlue
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                         Column(modifier = Modifier.weight(1f)) {
@@ -148,12 +131,12 @@ fun ProfileScreen(
                                 text = displayName,
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                             Text(
                                 text = userHandle,
                                 fontSize = 14.sp,
-                                color = TextSecondary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Box(
@@ -195,12 +178,12 @@ fun ProfileScreen(
                         ProfileStatBlock(
                             value = completedCleans.toString(),
                             label = "Files cleaned",
-                            valueColor = AccentPurple
+                            valueColor = MaterialTheme.colorScheme.secondary
                         )
                         ProfileStatBlock(
                             value = formatAudioHours(totalProcessedMinutes),
                             label = "Audio processed",
-                            valueColor = AccentCyan
+                            valueColor = MaterialTheme.colorScheme.tertiary
                         )
                         ProfileStatBlock(
                             value = dayStreak.toString(),
@@ -218,7 +201,7 @@ fun ProfileScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
-                colors = CardDefaults.cardColors(containerColor = BackgroundCard),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(20.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
@@ -232,7 +215,7 @@ fun ProfileScreen(
                             text = if (showProMemberBadge) "Pro Plan" else "Free plan",
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                         Surface(
                             shape = RoundedCornerShape(8.dp),
@@ -251,19 +234,19 @@ fun ProfileScreen(
                     Text(
                         text = "Renews on $renewalLabel",
                         fontSize = 12.sp,
-                        color = TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(14.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Free minutes left", fontSize = 13.sp, color = TextSecondary)
+                        Text("Free minutes left", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(
                             text = "$freeMinutesLeft / $freeQuotaMinutes",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -272,7 +255,7 @@ fun ProfileScreen(
                             .fillMaxWidth()
                             .height(8.dp)
                             .clip(RoundedCornerShape(4.dp))
-                            .background(SliderTrack)
+                            .background(MaterialTheme.colorScheme.outlineVariant)
                     ) {
                         Box(
                             modifier = Modifier
@@ -280,7 +263,7 @@ fun ProfileScreen(
                                 .fillMaxWidth(usedFraction.coerceIn(0f, 1f).coerceAtLeast(0.04f))
                                 .background(
                                     brush = Brush.horizontalGradient(
-                                        listOf(ThemeRed, ThemeBlue)
+                                        listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.primary)
                                     )
                                 )
                         )
@@ -324,7 +307,7 @@ fun ProfileScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceStripe),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 shape = RoundedCornerShape(18.dp)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
@@ -332,13 +315,13 @@ fun ProfileScreen(
                         text = "💎 Real insight",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Reel mode bundles clean + vibe + loudness in one flow. Preset: ${cleaningPreset.label} — tune from Home when you want a calmer or stronger pass.",
                         fontSize = 13.sp,
-                        color = TextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
                     )
                 }
@@ -367,7 +350,7 @@ private fun ProfileStatBlock(value: String, label: String, valueColor: Color) {
         Text(
             text = label,
             fontSize = 11.sp,
-            color = TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp)
         )
     }
