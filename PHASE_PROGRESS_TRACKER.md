@@ -152,8 +152,9 @@ Last updated: 2026-04-11
 - Outputs remain very quiet for ultra-low-input captures; this is now handled by retry + dry-mix + loudness floor, but thresholds still need tuning from real recordings.
 
 - Remote reel smoke: `POST /voice/reel/` with full fields accepted + completed (`job_id=24`, `job_type=reel`, `cleaned_url` returned).
-- Feedback API live and receiving real entries from app:
-  - total entries observed: 6
-  - split: `good=4`, `artifacts=2`
-  - mode concentration: extract-heavy feedback (`extract_voice=4`, `reel=2`)
-  - tracker files maintained by script: `data/FEEDBACK_RESULT_TRACKER.md`, `data/feedback_summary_history.jsonl`
+- Feedback API live and receiving real entries from app (refreshed **2026-04-13** via `scripts/feedback_report.py`):
+  - total entries: **13**; clear_voice yes/no: **3 / 7**; by result: `good=5`, `artifacts=6`, `quiet=2`
+  - modes: `clean=5`, `extract_voice=4`, `add_background=2`, `reel=2`
+  - latest same-day samples include `add_background` (quiet / artifacts + smoothness notes)
+  - local adaptive bias: `FeedbackAdaptiveMemory.record` + `applyFromFeedbackHistory` in `MainActivity` (noise frustration score boosts cloud mode / denoise)
+  - tracker files: `data/FEEDBACK_RESULT_TRACKER.md`, `data/feedback_summary_history.jsonl`

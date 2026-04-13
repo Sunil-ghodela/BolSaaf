@@ -395,7 +395,7 @@ fun HomeScreen(
                     index = audioPairs.indexOf(pair),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 12.dp)
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
                 ) {
                     ComparisonCard(
                         pair = pair,
@@ -940,13 +940,13 @@ fun SuccessCleanBanner(info: SaveInfo) {
 }
 
 @Composable
-fun MiniWaveformStrip(cleanedWav: File, modifier: Modifier = Modifier) {
+fun MiniWaveformStrip(cleanedWav: File, modifier: Modifier = Modifier, barCount: Int = 32) {
     var bars by remember(cleanedWav.path) { mutableStateOf<List<Float>>(emptyList()) }
     LaunchedEffect(cleanedWav.path) {
-        bars = withContext(Dispatchers.IO) { WavPreview.loadBars(cleanedWav, 36) }
+        bars = withContext(Dispatchers.IO) { WavPreview.loadBars(cleanedWav, barCount) }
     }
     Row(
-        modifier = modifier.height(36.dp),
+        modifier = modifier.height(28.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.Bottom
     ) {
@@ -993,23 +993,22 @@ fun ComparisonCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = BackgroundCard),
-        shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(4.dp)
+                    .height(3.dp)
                     .background(Brush.horizontalGradient(colors = listOf(ThemeRed, ThemeBlue)))
             )
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, SliderTrackStrong.copy(alpha = 0.35f), RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
-                    .padding(horizontal = 18.dp, vertical = 18.dp)
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
             ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1045,15 +1044,15 @@ fun ComparisonCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             MiniWaveformStrip(cleanedPath, modifier = Modifier.fillMaxWidth())
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 AudioSideBox(
                     modifier = Modifier.weight(1f),
@@ -1073,28 +1072,32 @@ fun ComparisonCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 VoiceActionPill(
+                    modifier = Modifier.weight(1f),
                     icon = Icons.AutoMirrored.Filled.Send,
                     label = "Share",
                     onClick = onShare
                 )
                 VoiceActionPill(
+                    modifier = Modifier.weight(1f),
                     icon = Icons.Filled.CheckCircle,
                     label = "Save",
                     onClick = onDownload
                 )
                 VoiceActionPill(
+                    modifier = Modifier.weight(1f),
                     icon = Icons.Filled.Info,
                     label = "Feedback",
                     onClick = onFeedback
                 )
                 VoiceActionPill(
+                    modifier = Modifier.weight(1f),
                     icon = Icons.Filled.Close,
                     label = "Delete",
                     tint = Color(0xFFEF5350),
@@ -1108,34 +1111,40 @@ fun ComparisonCard(
 
 @Composable
 fun VoiceActionPill(
+    modifier: Modifier = Modifier,
     icon: ImageVector,
     label: String,
     tint: Color = AccentGreen,
     onClick: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         color = SurfaceStripe,
-        modifier = Modifier
-            .border(1.dp, SliderTrackStrong.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+        modifier = modifier
+            .border(1.dp, SliderTrackStrong.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
             .clickable { onClick() }
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier
+                .padding(horizontal = 6.dp, vertical = 8.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
                 tint = tint,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(16.dp)
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = label,
-                fontSize = 12.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Medium,
-                color = TextPrimary
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
     }
@@ -1159,7 +1168,7 @@ fun AudioSideBox(
                 color = if (isPlaying) AccentGreen else borderColor,
                 shape = RoundedCornerShape(12.dp)
             )
-            .padding(12.dp),
+            .padding(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Title badge
@@ -1172,19 +1181,21 @@ fun AudioSideBox(
         ) {
             Text(
                 text = title,
-                fontSize = 11.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Medium,
                 color = if (title.contains("Original")) Color(0xFFFF9800) else AccentGreen,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
         
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         
         // Play/Stop Button - Larger and more visible
         Box(
             modifier = Modifier
-                .size(56.dp)
+                .size(48.dp)
                 .clip(CircleShape)
                 .background(
                     if (isPlaying) 
@@ -1222,17 +1233,17 @@ fun AudioSideBox(
                     imageVector = Icons.Filled.PlayArrow,
                     contentDescription = "Play",
                     tint = Color.White,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
         }
         
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         
         // Status text
         Text(
             text = if (isPlaying) "Playing..." else "Tap to play",
-            fontSize = 10.sp,
+            fontSize = 9.sp,
             color = if (isPlaying) AccentGreen else TextSecondary
         )
     }
