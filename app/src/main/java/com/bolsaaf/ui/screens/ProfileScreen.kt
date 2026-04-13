@@ -8,13 +8,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.ui.animation.MD3Motion
 import com.bolsaaf.ui.animation.slideInFromBottom
@@ -44,11 +50,19 @@ fun ProfileScreen(
     dayStreak: Int = 0,
     displayName: String = "Creator",
     userHandle: String = "@bolsaaf",
+    userEmail: String? = null,
+    isLoggedIn: Boolean = false,
     showProMemberBadge: Boolean = false,
     onUpgrade: () -> Unit = {},
-    onOpenSettings: () -> Unit = {}
+    onOpenSettings: () -> Unit = {},
+    onLogin: (String, String) -> Unit = { _, _ -> },
+    onLogout: () -> Unit = {}
 ) {
     val scroll = rememberScrollState()
+    var showLoginDialog by remember { mutableStateOf(false) }
+    var emailInput by remember { mutableStateOf("") }
+    var passwordInput by remember { mutableStateOf("") }
+
     val renewalLabel = remember {
         val c = Calendar.getInstance()
         c.add(Calendar.MONTH, 1)
@@ -354,7 +368,93 @@ fun ProfileScreen(
             }
             }
 
+            // Login/Logout Section
+            AnimatedVisibility(
+                visible = true,
+                enter = slideInFromBottom() + fadeIn(animationSpec = MD3Motion.StandardTween),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        if (isLoggedIn && userEmail != null) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Person,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Logged in as",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = userEmail,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = onLogout,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                                    contentColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Text("Logout")
+                            }
+                        } else {
+                            Text(
+                                text = "Sign in to sync your data",
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = { showLoginDialog = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Login with Email")
+                            }
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
+
+            // Login Dialog
+            if (showLoginDialog) {
+                LoginDialog(
+                    email = emailInput,
+                    password = passwordInput,
+                    onEmailChange = { emailInput = it },
+                    onPasswordChange = { passwordInput = it },
+                    onDismiss = { showLoginDialog = false },
+                    onLogin = {
+                        onLogin(emailInput, passwordInput)
+                        showLoginDialog = false
+                        emailInput = ""
+                        passwordInput = ""
+                    }
+                )
+            }
         }
 
         BottomNavBar(
@@ -362,6 +462,79 @@ fun ProfileScreen(
             selectedTab = selectedTab,
             onTabSelected = onTabSelected
         )
+    }
+}
+
+@Composable
+fun LoginDialog(
+    email: String,
+    password: String,
+    onEmailChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onLogin: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    text = "Login",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Sign in with your email",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = onEmailChange,
+                    label = { Text("Email") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = onPasswordChange,
+                    label = { Text("Password") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = onLogin,
+                        modifier = Modifier.weight(1f),
+                        enabled = email.isNotBlank() && password.isNotBlank()
+                    ) {
+                        Text("Login")
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -34,6 +34,7 @@ import com.bolsaaf.audio.VoiceCleaningApi
 import com.bolsaaf.ui.screens.CleanItem
 import com.bolsaaf.ui.screens.HomeScreen
 import com.bolsaaf.ui.screens.ProfileScreen
+import com.bolsaaf.ui.screens.SettingsDialog
 import com.bolsaaf.ui.theme.BolSaafTheme
 import java.io.File
 import java.text.SimpleDateFormat
@@ -86,6 +87,11 @@ class MainActivity : ComponentActivity() {
     private var phase2StageName by mutableStateOf<String?>(null)
     private var phase2OverallProgress by mutableIntStateOf(0)
     private var latestReelVariantFiles by mutableStateOf<Map<String, String>>(emptyMap())
+    private var showSettingsDialog by mutableStateOf(false)
+    private var isUserLoggedIn by mutableStateOf(false)
+    private var userEmail by mutableStateOf<String?>(null)
+    private var userDisplayName by mutableStateOf("You")
+    private var userHandle by mutableStateOf("@bolsaaf")
 
     // Store audio pairs for comparison (timestamp -> AudioPair)
     private var audioPairsList = mutableStateListOf<AudioPair>()
@@ -115,8 +121,8 @@ class MainActivity : ComponentActivity() {
 
     private fun openUploadPicker() {
         when (processingFlow) {
-            ProcessingFlow.VIDEO_PROCESS -> pickVideoLauncher.launch("video/*")
-            else -> pickAudioLauncher.launch("audio/*")
+            ProcessingFlow.VIDEO_PROCESS -> pickVideoLauncher.launch("video/*|audio/*")
+            else -> pickAudioLauncher.launch("audio/*|video/*")
         }
     }
 
@@ -211,6 +217,7 @@ class MainActivity : ComponentActivity() {
                             lastAdaptiveProfile?.let { cleaningPreset = it.suggestedCleaningPreset }
                         },
                         onProminentReelClick = { processingFlow = ProcessingFlow.REEL_MODE },
+                        onOpenSettings = { showSettingsDialog() },
                         reelVariantFiles = latestReelVariantFiles,
                         onPlayReelVariant = { fileName -> playAudioFile(fileName) },
                         onShareReelVariant = { fileName -> shareFile(fileName) },
@@ -264,15 +271,17 @@ class MainActivity : ComponentActivity() {
                         completedCleans = getAudioPairs().size,
                         totalProcessedMinutes = totalProcessedMinutes(),
                         dayStreak = readProfileStreak(),
-                        displayName = "You",
-                        userHandle = "@bolsaaf",
+                        displayName = userDisplayName,
+                        userHandle = userHandle,
+                        userEmail = userEmail,
+                        isLoggedIn = isUserLoggedIn,
                         showProMemberBadge = false,
                         onUpgrade = {
                             Toast.makeText(this, "Upgrade flow coming soon", Toast.LENGTH_SHORT).show()
                         },
-                        onOpenSettings = {
-                            Toast.makeText(this, "Settings coming soon", Toast.LENGTH_SHORT).show()
-                        }
+                        onOpenSettings = { showSettingsDialog() },
+                        onLogin = { email, password -> handleLogin(email, password) },
+                        onLogout = { handleLogout() }
                     )
                     else -> HomeScreen(
                         recordingsDir = recDir,
@@ -336,13 +345,57 @@ class MainActivity : ComponentActivity() {
                             lastAdaptiveProfile?.let { cleaningPreset = it.suggestedCleaningPreset }
                         },
                         onProminentReelClick = { processingFlow = ProcessingFlow.REEL_MODE },
+                        onOpenSettings = { showSettingsDialog() },
                         reelVariantFiles = latestReelVariantFiles,
                         onPlayReelVariant = { fileName -> playAudioFile(fileName) },
                         onShareReelVariant = { fileName -> shareFile(fileName) },
                         onDownloadReelVariant = { fileName -> downloadFile(fileName) }
                     )
                 }
+
+                // Settings Dialog
+                if (showSettingsDialog) {
+                    SettingsDialog(
+                        onDismiss = { showSettingsDialog = false },
+                        onClearCache = { clearCache() },
+                        onAbout = {
+                            Toast.makeText(this@MainActivity, "BolSaaf v1.0.0\nAudio & Video Studio", Toast.LENGTH_LONG).show()
+                            showSettingsDialog = false
+                        },
+                        onPrivacyPolicy = {
+                            Toast.makeText(this@MainActivity, "Privacy Policy coming soon", Toast.LENGTH_SHORT).show()
+                            showSettingsDialog = false
+                        },
+                        onTermsOfService = {
+                            Toast.makeText(this@MainActivity, "Terms of Service coming soon", Toast.LENGTH_SHORT).show()
+                            showSettingsDialog = false
+                        }
+                    )
+                }
             }
+        }
+    }
+
+    private fun showSettingsDialog() {
+        showSettingsDialog = true
+    }
+
+    private fun clearCache() {
+        try {
+            val cacheDir = cacheDir
+            val tmpFiles = cacheDir.listFiles()?.filter { it.name.startsWith("tmp") || it.name.startsWith("adaptive") }
+            tmpFiles?.forEach { it.delete() }
+
+            val outputDir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "BolSaaf")
+            val oldFiles = outputDir.listFiles()?.filter {
+                it.lastModified() < System.currentTimeMillis() - 7 * 24 * 60 * 60 * 1000 // 7 days old
+            }
+            oldFiles?.forEach { it.delete() }
+
+            Toast.makeText(this, "Cache cleared", Toast.LENGTH_SHORT).show()
+            showSettingsDialog = false
+        } catch (e: Exception) {
+            Toast.makeText(this, "Failed to clear cache", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -363,6 +416,35 @@ class MainActivity : ComponentActivity() {
         if (needPermissions.isNotEmpty()) {
             requestPermissionLauncher.launch(needPermissions.toTypedArray())
         }
+    }
+
+    private fun handleLogin(email: String, password: String) {
+        // For now, just simulate login - in production, this would call an API
+        Thread {
+            try {
+                // Simulate network call
+                Thread.sleep(500)
+                runOnUiThread {
+                    isUserLoggedIn = true
+                    userEmail = email
+                    userDisplayName = email.substringBefore("@").capitalize(Locale.getDefault())
+                    userHandle = "@" + email.substringBefore("@").take(10)
+                    Toast.makeText(this, "Welcome back!", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this, "Login failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun handleLogout() {
+        isUserLoggedIn = false
+        userEmail = null
+        userDisplayName = "You"
+        userHandle = "@bolsaaf"
+        Toast.makeText(this, "Logged out successfully", Toast.LENGTH_SHORT).show()
     }
 
     private fun startRecording() {

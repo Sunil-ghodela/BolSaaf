@@ -1,6 +1,24 @@
 # BolSaaf Phase Progress Tracker
 
-**Last Updated**: 2026-04-13 (Reel V2 Android wired + release shipped)
+**Last Updated**: 2026-04-13 (UI/UX fixes + Settings + Login/Logout)
+
+## ✅ COMPLETED UI/UX FIXES (April 13)
+
+### Home Screen
+- **Make Reel Banner**: Converted button to banner-style gradient CTA with sparkles and arrow indicator
+- **Recent Clean Cards**: Removed blue strip, added proper spacing (8dp vertical), border, and scale/fade animations
+- **Video Support**: Fixed video picker to support video/* and audio/* MIME types
+
+### Settings
+- **Settings Dialog**: Created full Settings dialog with About, Clear Cache, Privacy Policy, Terms of Service options
+- **Quick Action Card**: Settings card now functional with onClick handler
+
+### User Profile
+- **Email Login/Logout**: Implemented LoginDialog with email/password fields
+- **User State**: Added isLoggedIn, userEmail, userDisplayName, userHandle state in MainActivity
+- **Profile UI**: Shows logged-in user email with logout button, or login prompt when not logged in
+
+**Status**: All UI/UX fixes completed and wired to MainActivity
 
 ## 🎨 LATEST: Material Design 3 Design System (April 13)
 

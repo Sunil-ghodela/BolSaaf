@@ -2,6 +2,7 @@ package com.bolsaaf.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.foundation.*
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -157,7 +158,8 @@ fun HomeScreen(
     reelVariantFiles: Map<String, String> = emptyMap(),
     onPlayReelVariant: (String) -> Unit = {},
     onShareReelVariant: (String) -> Unit = {},
-    onDownloadReelVariant: (String) -> Unit = {}
+    onDownloadReelVariant: (String) -> Unit = {},
+    onOpenSettings: () -> Unit = {}
 ) {
     var feedbackPair by remember { mutableStateOf<AudioPair?>(null) }
     
@@ -283,25 +285,8 @@ fun HomeScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = onProminentReelClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .height(52.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                ) {
-                    Text(
-                        text = "Make Reel — recommended",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                // Banner-style Make Reel CTA
+                MakeReelBanner(onClick = onProminentReelClick)
 
                 if (showBackgroundControls) {
                     Spacer(modifier = Modifier.height(12.dp))
@@ -473,7 +458,8 @@ fun HomeScreen(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Filled.Settings,
                         title = "Settings",
-                        subtitle = "Customize karo"
+                        subtitle = "Customize karo",
+                        onClick = onOpenSettings
                     )
                 }
 
@@ -1033,26 +1019,43 @@ fun ComparisonCard(
     val isCleanedPlaying = currentlyPlaying == pair.cleanedFile
     val cleanedPath = File(recordingsDir, pair.cleanedFile)
 
+    // Animation states
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { isVisible = true }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0.95f,
+        animationSpec = tween(400, easing = EaseOutCubic),
+        label = "scale"
+    )
+    val alpha by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = tween(400, easing = EaseOutCubic),
+        label = "alpha"
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 8.dp, horizontal = 4.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                this.alpha = alpha
+            },
         colors = CardDefaults.cardColors(containerColor = BackgroundCard),
         shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = SliderTrackStrong.copy(alpha = 0.3f)
+        )
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .background(Brush.horizontalGradient(colors = listOf(ThemeRed, ThemeBlue)))
-            )
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp)
-            ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1146,7 +1149,6 @@ fun ComparisonCard(
                     tint = Color(0xFFEF5350),
                     onClick = onRemove
                 )
-            }
             }
         }
     }
@@ -1961,6 +1963,217 @@ fun ProcessingDialog(
                     textAlign = TextAlign.Center
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun MakeReelBanner(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val gradientBrush = Brush.horizontalGradient(
+        colors = listOf(
+            Color(0xFFE34C52),
+            Color(0xFFFF7043),
+            Color(0xFFFF8A65)
+        )
+    )
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .height(64.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(gradientBrush),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Sparkle icon
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Color.White.copy(alpha = 0.2f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("✨", fontSize = 18.sp)
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Make Reel — recommended",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "1 tap mein reel ready",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.85f)
+                    )
+                }
+
+                // Arrow indicator
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(Color.White.copy(alpha = 0.15f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsDialog(
+    onDismiss: () -> Unit,
+    onClearCache: () -> Unit = {},
+    onAbout: () -> Unit = {},
+    onPrivacyPolicy: () -> Unit = {},
+    onTermsOfService: () -> Unit = {}
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(containerColor = BackgroundCard),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "Settings",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Customize your experience",
+                    fontSize = 12.sp,
+                    color = TextSecondary
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Settings options
+                SettingsOption(
+                    icon = Icons.Filled.Info,
+                    title = "About BolSaaf",
+                    subtitle = "Version 1.0.0",
+                    onClick = onAbout
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                SettingsOption(
+                    icon = Icons.Filled.Warning,
+                    title = "Clear Cache",
+                    subtitle = "Free up storage space",
+                    onClick = onClearCache
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                SettingsOption(
+                    icon = Icons.Filled.Person,
+                    title = "Privacy Policy",
+                    subtitle = "How we protect your data",
+                    onClick = onPrivacyPolicy
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                SettingsOption(
+                    icon = Icons.Filled.Star,
+                    title = "Terms of Service",
+                    subtitle = "App usage terms",
+                    onClick = onTermsOfService
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Close",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsOption(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() },
+        color = SurfaceStripe,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = ThemeBlue,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = TextSecondary
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Send,
+                contentDescription = null,
+                tint = TextSecondary,
+                modifier = Modifier.size(16.dp)
+            )
         }
     }
 }
