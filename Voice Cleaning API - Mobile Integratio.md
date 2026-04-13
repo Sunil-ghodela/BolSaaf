@@ -1,71 +1,76 @@
-# Voice Cleaning API - Mobile Integration Guide
+# Voice Cleaning API — Mobile Integration Guide
+
+**API version: 2.2.0**
+
+This document matches the **BolSaaf Voice API v2.2** contract used by the mobile apps. It includes clean flow plus phase-2 reel features, adaptive hints, and quality-guard compatibility keys.
+
+---
 
 ## Base URL
+
 ```
 Production: https://shadowselfwork.com/voice/
 ```
+
+All paths below are relative to the API root (`/voice/`). Trailing slashes are shown as implemented on the server.
 
 ---
 
 ## Endpoints
 
-### 1. Health Check
-**Endpoint:** `GET /voice/health/`
+### 1. Health check
 
-Check if the voice cleaning service is running.
+**`GET /voice/health/`**
 
-**Request:**
-```http
-GET /voice/health/
-```
+Confirms the service is up. In v2, the response may include extra capability fields depending on deployment; clients should tolerate unknown keys.
 
-**Response:**
+**Example response (200):**
+
 ```json
 {
   "status": "ok",
   "service": "BolSaaf Voice Cleaning API",
-  "version": "1.0.0"
+  "version": "2.0.0"
 }
 ```
 
-**Status Code:** `200 OK`
+If `version` still shows an older string on the server, treat it as a deployment detail; **v2 behavior** is defined by the clean/status JSON shapes below.
 
 ---
 
-### 2. Upload & Clean Audio
-**Endpoint:** `POST /voice/clean/`
+### 2. Upload and clean audio
 
-Upload an audio file and receive a cleaned version with noise reduction and audio enhancement.
+**`POST /voice/clean/`**
 
-**Request:**
-```http
-POST /voice/clean/
-Content-Type: multipart/form-data
-```
+**`Content-Type:`** `multipart/form-data`
 
-**Form Data:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| file | File | Yes | Audio file (WAV format, max 5MB) |
-| mode | String | No | Processing mode: `basic`, `standard`, `studio` (default: `standard`) |
+| Field  | Type   | Required | Default    | Description |
+|--------|--------|----------|------------|-------------|
+| `file` | file   | Yes      | —          | Audio: **MP3, M4A, WAV, OGG, FLAC** (max **5 MB**) |
+| `mode` | string | No       | `standard` | `basic`, `standard`, `studio`, `pro` |
 
-**Processing Modes:**
-- **basic**: RNNoise denoising only (fastest)
-- **standard**: RNNoise + EQ + compression (recommended)
-- **studio**: Full processing with normalization (best quality)
+**Success (200)** — typical shape:
 
-**Response (Success):**
 ```json
 {
   "status": "success",
+  "message": "✨ Audio cleaned successfully",
   "job_id": 123,
-  "cleaned_url": "https://shadowselfwork.com/media/cleaned/clean_123.wav",
+  "cleaned_url": "/media/cleaned/clean_123_recording.wav",
   "duration": 10.5,
+  "processing_time": 2.4,
   "mode": "standard"
 }
 ```
 
-**Response (Error):**
+- **`cleaned_url`** may be a **full URL** (`https://…`) or a **path** starting with `/media/…`. Mobile clients **must** resolve relative paths against the **site origin** (see [Resolving `cleaned_url`](#resolving-cleaned_url)).
+- **`processing_time`** is server-side processing time in seconds (when provided).
+- If the success payload omits **`cleaned_url`** but includes **`job_id`**, poll **`GET /voice/status/{job_id}/`** until `status` is `completed` or `failed` (see [Job status](#3-job-status)).
+
+**Errors**
+
+- **400** — e.g. file too large, invalid parameters:
+
 ```json
 {
   "status": "error",
@@ -73,83 +78,228 @@ Content-Type: multipart/form-data
 }
 ```
 
-**Status Codes:**
-- `200 OK` - Success
-- `400 Bad Request` - Invalid file or parameters
-- `500 Internal Server Error` - Processing failed
+- **500** — processing failure:
+
+```json
+{
+  "status": "error",
+  "message": "Processing failed: Invalid audio format"
+}
+```
 
 ---
 
-### 3. Check Job Status
-**Endpoint:** `GET /voice/status/{job_id}/`
+### 3. Job status
 
-Check the status of an audio processing job.
+**`GET /voice/status/{job_id}/`**
 
-**Request:**
-```http
-GET /voice/status/123/
-```
+Use this for **async-style** flows or when the clean response did not include a downloadable URL yet.
 
-**Response (Success):**
+**Completed (200):**
+
 ```json
 {
-  "status": "success",
-  "job_id": 123,
-  "state": "completed",
-  "cleaned_url": "https://shadowselfwork.com/media/cleaned/clean_123.wav",
+  "job_id": 1,
+  "status": "completed",
   "duration": 10.5,
-  "created_at": "2026-04-07T09:30:00Z"
+  "processing_mode": "studio",
+  "cleaned_url": "/media/cleaned/clean_1_recording.wav",
+  "error_message": null,
+  "created_at": "2026-04-07T10:30:00Z",
+  "updated_at": "2026-04-07T10:30:05Z"
 }
 ```
 
-**Response (Processing):**
+**Processing (200):**
+
 ```json
 {
-  "status": "success",
-  "job_id": 123,
-  "state": "processing",
-  "progress": 50
+  "job_id": 2,
+  "status": "processing",
+  "duration": null,
+  "processing_mode": "studio",
+  "cleaned_url": null,
+  "error_message": null,
+  "created_at": "2026-04-07T10:35:00Z",
+  "updated_at": "2026-04-07T10:35:01Z"
 }
 ```
 
-**Response (Not Found):**
+**Failed (200):**
+
+```json
+{
+  "job_id": 3,
+  "status": "failed",
+  "duration": null,
+  "processing_mode": "studio",
+  "cleaned_url": null,
+  "error_message": "Audio processing failed: Invalid audio format",
+  "created_at": "2026-04-07T10:40:00Z",
+  "updated_at": "2026-04-07T10:40:02Z"
+}
+```
+
+**Not found (404):**
+
 ```json
 {
   "error": "Job not found"
 }
 ```
 
-**Status Codes:**
-- `200 OK` - Success
-- `404 Not Found` - Job ID not found
+**Important:** Here, top-level **`status`** is the **job state** (`completed` | `processing` | `failed`), not the same as the clean endpoint’s `"status": "success"` wrapper.
+For backward compatibility, the server may also include legacy keys like `state`, `mode`, and `processing_time`; clients should prefer `status` + `processing_mode`.
+
+---
+## 4) Phase-2+ endpoints used by mobile
+
+The app now uses these async endpoints in addition to `/clean/`:
+
+- `POST /voice/extract_voice/`
+- `POST /voice/add_background/`
+- `POST /voice/reel/` (**primary path**)
+- `POST /voice/video/process/`
+- `GET /voice/backgrounds/`
+
+### Optional adaptive and quality metadata
+
+Status payloads may include extra objects:
+
+```json
+{
+  "adaptive": {
+    "rms_dbfs": -62.4,
+    "near_zero_fraction": 0.72,
+    "confidence": 0.86,
+    "preset": {
+      "pre_gain": 4.0,
+      "denoise_level": "STRONG",
+      "compressor_strength": "MEDIUM",
+      "dry_mix": 0.10,
+      "mode": "studio"
+    }
+  },
+  "quality_guard": {
+    "issues": ["output_very_quiet"],
+    "retry_applied": true,
+    "dry_mix_applied": true,
+    "loudness_floor_applied": true
+  }
+}
+```
+
+These keys are optional; clients should ignore unknown keys safely.
 
 ---
 
-## File Requirements
+## Processing modes (v2.2)
 
-### Audio Format
-- **Format**: WAV only
-- **Sample Rate**: 48kHz recommended (auto-resampled if different)
-- **Channels**: Mono or stereo (converted to mono for processing)
-- **Max Size**: 5MB
-- **Max Duration**: ~5 minutes (depending on quality)
+| Mode        | Typical use |
+|------------|-------------|
+| `basic`    | Lightest pipeline; fastest |
+| `standard` | Default; balanced quality and speed |
+| `studio`   | Stronger processing |
+| `pro`      | Maximum quality (slowest) |
 
-### Why WAV?
-- Lossless format
-- Better processing quality
-- RNNoise optimized for WAV
+Exact DSP/AI steps depend on server configuration.
+
+### BolSaaf Android app mapping (reference)
+
+| App preset   | `mode` sent to API |
+|-------------|---------------------|
+| Normal      | `standard`          |
+| Strong      | `studio`            |
+| Studio      | `pro`               |
 
 ---
 
-## Mobile Integration Examples
+## File requirements
+
+| Requirement   | Value |
+|---------------|--------|
+| Max file size | **5 MB** |
+| Formats       | **MP3, M4A, WAV, OGG, FLAC** (per v2 API) |
+| Channels      | Mono or stereo (server may downmix) |
+| Sample rate   | 48 kHz recommended for voice; server may resample |
+
+**Mobile note:** The Android app may still export **WAV** before upload for a predictable pipeline; you may also upload supported formats directly if your product flow allows, staying under 5 MB.
+
+---
+
+## Resolving `cleaned_url`
+
+Never pass a relative path straight to `URL` / `HttpURLConnection` without a host.
+
+**JavaScript**
+
+```javascript
+function resolveCleanedUrl(voiceBaseUrl, cleanedUrl) {
+  if (!cleanedUrl) return null;
+  const s = String(cleanedUrl).trim();
+  if (/^https?:\/\//i.test(s)) return s;
+  const origin = new URL(voiceBaseUrl).origin;
+  return s.startsWith('/') ? origin + s : `${origin}/${s}`;
+}
+```
+
+**Kotlin (conceptual)**
+
+```kotlin
+fun resolveCleanedUrl(voiceBaseUrl: String, cleanedUrl: String): String {
+    val u = cleanedUrl.trim()
+    if (u.startsWith("http://", ignoreCase = true) || u.startsWith("https://", ignoreCase = true)) return u
+    val origin = java.net.URL(voiceBaseUrl.trimEnd('/') + "/").let { "${it.protocol}://${it.host}${if (it.port == -1 || it.port == it.defaultPort) "" else ":${it.port}"}" }
+    return if (u.startsWith("/")) origin + u else "$origin/$u"
+}
+```
+
+The production app implements this in **`com.bolsaaf.audio.VoiceCleaningApi`**.
+
+---
+
+## Integration flow
+
+### Recommended mobile flow
+
+```
+1. Record or pick audio
+   ↓
+2. Ensure file ≤ 5 MB (and format accepted by API)
+   ↓
+3. Show “Processing…”
+   ↓
+4. POST /voice/clean/ (multipart: file + mode)
+   ↓
+5. If cleaned_url is present → resolve if relative → GET download
+   If cleaned_url missing but job_id present → poll GET /voice/status/{job_id}/
+   ↓
+6. Play or save cleaned file locally
+```
+
+- Use **background threads** / coroutines for upload, download, and polling.
+- Use generous **read timeouts** for large uploads (e.g. 60–120 s).
+- Poll every **1–2 s** with a **max wait** (e.g. 2 minutes) to avoid infinite loops.
+
+---
+
+## Mobile integration examples
+
+Examples use production base URL `https://shadowselfwork.com/voice/`. Always resolve `cleaned_url` as in the previous section.
 
 ### React Native
 
 ```javascript
 import FormData from 'form-data';
-import fs from 'fs';
 
-// Upload and clean audio
+function resolveCleanedUrl(voiceBaseUrl, cleanedUrl) {
+  if (!cleanedUrl) return null;
+  const s = String(cleanedUrl).trim();
+  if (/^https?:\/\//i.test(s)) return s;
+  const origin = new URL(voiceBaseUrl).origin;
+  return s.startsWith('/') ? origin + s : `${origin}/${s}`;
+}
+
 async function cleanAudio(audioFilePath, mode = 'standard') {
   const formData = new FormData();
   formData.append('file', {
@@ -159,51 +309,42 @@ async function cleanAudio(audioFilePath, mode = 'standard') {
   });
   formData.append('mode', mode);
 
-  try {
-    const response = await fetch('https://shadowselfwork.com/voice/clean/', {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+  const response = await fetch('https://shadowselfwork.com/voice/clean/', {
+    method: 'POST',
+    body: formData,
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
 
-    const result = await response.json();
-    
-    if (result.status === 'success') {
-      console.log('Cleaned audio URL:', result.cleaned_url);
-      console.log('Duration:', result.duration, 'seconds');
-      return result;
-    } else {
-      console.error('Error:', result.message);
-      return null;
-    }
-  } catch (error) {
-    console.error('Upload failed:', error);
+  const result = await response.json();
+  if (result.status !== 'success') {
+    console.error(result.message);
     return null;
   }
+
+  let path = (result.cleaned_url || '').trim();
+  if (!path && result.job_id) {
+    path = await pollUntilCleaned(result.job_id);
+  }
+  const downloadUrl = resolveCleanedUrl('https://shadowselfwork.com/voice/', path);
+  return { ...result, downloadUrl };
 }
 
-// Check job status
-async function checkJobStatus(jobId) {
-  try {
-    const response = await fetch(`https://shadowselfwork.com/voice/status/${jobId}/`);
-    const result = await response.json();
-    
-    if (result.status === 'success') {
-      console.log('Job state:', result.state);
-      if (result.state === 'completed') {
-        console.log('Download URL:', result.cleaned_url);
-      }
-      return result;
-    } else {
-      console.error('Error:', result.error);
-      return null;
-    }
-  } catch (error) {
-    console.error('Status check failed:', error);
-    return null;
+async function pollUntilCleaned(jobId) {
+  const base = 'https://shadowselfwork.com/voice/status/';
+  for (let i = 0; i < 80; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 1500));
+    const res = await fetch(`${base}${jobId}/`);
+    const j = await res.json();
+    if (j.status === 'completed' && j.cleaned_url) return j.cleaned_url;
+    if (j.status === 'failed') throw new Error(j.error_message || 'Job failed');
   }
+  throw new Error('Timeout waiting for job');
+}
+
+async function checkJobStatus(jobId) {
+  const response = await fetch(`https://shadowselfwork.com/voice/status/${jobId}/`);
+  if (response.status === 404) return null;
+  return response.json();
 }
 ```
 
@@ -214,16 +355,19 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
-// Upload and clean audio
-Future<Map<String, dynamic>?> cleanAudio(
-  String audioFilePath, 
-  String mode = 'standard'
-) async {
-  var request = http.MultipartRequest(
+String resolveCleanedUrl(String voiceBaseUrl, String? cleanedUrl) {
+  if (cleanedUrl == null || cleanedUrl.isEmpty) return '';
+  final s = cleanedUrl.trim();
+  if (s.startsWith('http://') || s.startsWith('https://')) return s;
+  final origin = Uri.parse(voiceBaseUrl).origin;
+  return s.startsWith('/') ? '$origin$s' : '$origin/$s';
+}
+
+Future<Map<String, dynamic>?> cleanAudio(String audioFilePath, {String mode = 'standard'}) async {
+  final request = http.MultipartRequest(
     'POST',
     Uri.parse('https://shadowselfwork.com/voice/clean/'),
   );
-
   request.files.add(await http.MultipartFile.fromPath(
     'file',
     audioFilePath,
@@ -231,47 +375,34 @@ Future<Map<String, dynamic>?> cleanAudio(
   ));
   request.fields['mode'] = mode;
 
-  try {
-    var response = await request.send();
-    var responseBody = await response.stream.bytesToString();
-    var result = jsonDecode(responseBody);
+  final streamed = await request.send();
+  final body = await streamed.stream.bytesToString();
+  final result = jsonDecode(body) as Map<String, dynamic>;
 
-    if (result['status'] == 'success') {
-      print('Cleaned audio URL: ${result['cleaned_url']}');
-      print('Duration: ${result['duration']} seconds');
-      return result;
-    } else {
-      print('Error: ${result['message']}');
-      return null;
-    }
-  } catch (error) {
-    print('Upload failed: $error');
-    return null;
+  if (result['status'] != 'success') return null;
+
+  var path = (result['cleaned_url'] ?? '').toString().trim();
+  if (path.isEmpty && result['job_id'] != null) {
+    path = await pollUntilCleaned(result['job_id'] as int);
   }
+  result['downloadUrl'] = resolveCleanedUrl('https://shadowselfwork.com/voice/', path);
+  return result;
 }
 
-// Check job status
-Future<Map<String, dynamic>?> checkJobStatus(int jobId) async {
-  try {
-    var response = await http.get(
-      Uri.parse('https://shadowselfwork.com/voice/status/$jobId/'),
-    );
-    var result = jsonDecode(response.body);
-
-    if (result['status'] == 'success') {
-      print('Job state: ${result['state']}');
-      if (result['state'] == 'completed') {
-        print('Download URL: ${result['cleaned_url']}');
-      }
-      return result;
-    } else {
-      print('Error: ${result['error']}');
-      return null;
+Future<String> pollUntilCleaned(int jobId) async {
+  final uri = Uri.parse('https://shadowselfwork.com/voice/status/$jobId/');
+  for (var i = 0; i < 80; i++) {
+    if (i > 0) await Future.delayed(const Duration(milliseconds: 1500));
+    final res = await http.get(uri);
+    final j = jsonDecode(res.body) as Map<String, dynamic>;
+    if (j['status'] == 'completed' && (j['cleaned_url'] ?? '').toString().isNotEmpty) {
+      return j['cleaned_url'].toString();
     }
-  } catch (error) {
-    print('Status check failed: $error');
-    return null;
+    if (j['status'] == 'failed') {
+      throw Exception(j['error_message'] ?? 'Job failed');
+    }
   }
+  throw Exception('Timeout');
 }
 ```
 
@@ -280,240 +411,100 @@ Future<Map<String, dynamic>?> checkJobStatus(int jobId) async {
 ```swift
 import Foundation
 
-// Upload and clean audio
+func resolveCleanedUrl(voiceBaseUrl: String, cleanedUrl: String) -> String {
+    let s = cleanedUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+    if s.lowercased().hasPrefix("http://") || s.lowercased().hasPrefix("https://") { return s }
+    guard let u = URL(string: voiceBaseUrl) else { return s }
+    var origin = "\(u.scheme ?? "https")://\(u.host ?? "")"
+    if let p = u.port, p > 0, !(p == 80 && u.scheme == "http"), !(p == 443 && u.scheme == "https") {
+        origin += ":\(p)"
+    }
+    return s.hasPrefix("/") ? "\(origin)\(s)" : "\(origin)/\(s)"
+}
+
 func cleanAudio(audioFileURL: URL, mode: String = "standard") async throws -> [String: Any] {
     let url = URL(string: "https://shadowselfwork.com/voice/clean/")!
-    
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
-    
     let boundary = UUID().uuidString
     request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-    
+
     var body = Data()
-    
-    // Add file
     let fileData = try Data(contentsOf: audioFileURL)
     body.append("--\(boundary)\r\n".data(using: .utf8)!)
     body.append("Content-Disposition: form-data; name=\"file\"; filename=\"recording.wav\"\r\n".data(using: .utf8)!)
     body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
     body.append(fileData)
     body.append("\r\n".data(using: .utf8)!)
-    
-    // Add mode
     body.append("--\(boundary)\r\n".data(using: .utf8)!)
     body.append("Content-Disposition: form-data; name=\"mode\"\r\n\r\n".data(using: .utf8)!)
     body.append(mode.data(using: .utf8)!)
     body.append("\r\n".data(using: .utf8)!)
-    
     body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-    
     request.httpBody = body
-    
+
     let (data, _) = try await URLSession.shared.data(for: request)
-    
-    if let result = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-       result["status"] as? String == "success" {
-        print("Cleaned audio URL: \(result["cleaned_url"] ?? "")")
-        print("Duration: \(result["duration"] ?? 0) seconds")
-        return result
-    } else {
-        throw NSError(domain: "VoiceAPI", code: -1, userInfo: ["message": "Upload failed"])
+    guard let result = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+          result["status"] as? String == "success" else {
+        throw NSError(domain: "VoiceAPI", code: -1)
     }
+    return result
 }
 
-// Check job status
 func checkJobStatus(jobId: Int) async throws -> [String: Any] {
     let url = URL(string: "https://shadowselfwork.com/voice/status/\(jobId)/")!
-    
     let (data, _) = try await URLSession.shared.data(from: url)
-    
-    if let result = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-       result["status"] as? String == "success" {
-        print("Job state: \(result["state"] ?? "")")
-        if result["state"] as? String == "completed" {
-            print("Download URL: \(result["cleaned_url"] ?? "")")
-        }
-        return result
-    } else {
-        throw NSError(domain: "VoiceAPI", code: -1, userInfo: ["message": "Status check failed"])
-    }
+    return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
 }
 ```
 
 ### Kotlin (Android)
 
+Production code uses **`com.bolsaaf.audio.VoiceCleaningApi`**: it posts to **`/clean/`**, resolves relative **`cleaned_url`**, optionally polls **`/status/{job_id}/`**, parses **`processing_time`**, and downloads to a **`File`**.
+
+Minimal OkHttp-style sketch (v2 shape):
+
 ```kotlin
-import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.asRequestBody
-import java.io.File
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import org.json.JSONObject
-
-// Upload and clean audio
-suspend fun cleanAudio(
-    audioFile: File,
-    mode: String = "standard"
-): JSONObject? = withContext(Dispatchers.IO) {
-    val client = OkHttpClient()
-    
-    val requestBody = MultipartBody.Builder()
-        .setType(MultipartBody.FORM)
-        .addFormDataPart(
-            "file",
-            audioFile.name,
-            audioFile.asRequestBody("audio/wav".toMediaType())
-        )
-        .addFormDataPart("mode", mode)
-        .build()
-    
-    val request = Request.Builder()
-        .url("https://shadowselfwork.com/voice/clean/")
-        .post(requestBody)
-        .build()
-    
-    try {
-        val response = client.newCall(request).execute()
-        val result = JSONObject(response.body?.string() ?: "")
-        
-        if (result.getString("status") == "success") {
-            println("Cleaned audio URL: ${result.getString("cleaned_url")}")
-            println("Duration: ${result.getDouble("duration")} seconds")
-            return@withContext result
-        } else {
-            println("Error: ${result.getString("message")}")
-            return@withContext null
-        }
-    } catch (e: Exception) {
-        println("Upload failed: ${e.message}")
-        return@withContext null
-    }
-}
-
-// Check job status
-suspend fun checkJobStatus(jobId: Int): JSONObject? = withContext(Dispatchers.IO) {
-    val client = OkHttpClient()
-    
-    val request = Request.Builder()
-        .url("https://shadowselfwork.com/voice/status/$jobId/")
-        .get()
-        .build()
-    
-    try {
-        val response = client.newCall(request).execute()
-        val result = JSONObject(response.body?.string() ?: "")
-        
-        if (result.getString("status") == "success") {
-            println("Job state: ${result.getString("state")}")
-            if (result.getString("state") == "completed") {
-                println("Download URL: ${result.getString("cleaned_url")}")
-            }
-            return@withContext result
-        } else {
-            println("Error: ${result.getString("error")}")
-            return@withContext null
-        }
-    } catch (e: Exception) {
-        println("Status check failed: ${e.message}")
-        return@withContext null
-    }
-}
+// POST multipart to https://shadowselfwork.com/voice/clean/
+// On success JSON: status == "success" → cleaned_url and/or job_id
+// GET https://shadowselfwork.com/voice/status/{id}/ until status == "completed" or "failed"
+// Download final URL after resolveCleanedUrl(baseVoiceUrl, cleaned_url)
 ```
 
 ---
 
-## Integration Flow
+## Error handling
 
-### Recommended Flow for Mobile App
+### Common cases
 
-```
-1. User Records Audio
-   ↓
-2. Convert to WAV format (if needed)
-   ↓
-3. Show "Processing..." UI
-   ↓
-4. Upload to /voice/clean/
-   ↓
-5. Receive cleaned_url immediately (synchronous)
-   ↓
-6. Download and play cleaned audio
-```
-
-**Note:** Current implementation is synchronous. For large files or heavy load, consider:
-- Showing loading spinner during upload
-- Implementing timeout handling (30-60 seconds)
-- Adding retry logic for failed uploads
+| Situation | What to do |
+|-----------|------------|
+| `File size exceeds 5MB limit` | Shorten recording or re-encode |
+| Invalid or unsupported format | Use an allowed format or transcode |
+| `Job not found` (404) | Stale `job_id`; re-upload |
+| Job `failed` with `error_message` | Show message; optional retry with another `mode` |
 
 ---
 
-## Error Handling
+## Best practices
 
-### Common Errors
-
-| Error | Description | Solution |
-|-------|-------------|----------|
-| `File size exceeds 5MB limit` | Audio file too large | Compress or reduce recording duration |
-| `Invalid file format` | Not a WAV file | Convert to WAV before upload |
-| `Processing failed` | Server error during processing | Retry with different mode or contact support |
-| `Job not found` | Invalid job ID | Check job ID or upload again |
-
-### Error Response Format
-
-```json
-{
-  "status": "error",
-  "message": "Error description here"
-}
-```
-
----
-
-## Best Practices
-
-### 1. File Preparation
-- Convert recordings to WAV format before upload
-- Ensure sample rate is 48kHz for best quality
-- Keep file size under 5MB
-- Test with sample files before production
-
-### 2. User Experience
-- Show progress indicator during upload
-- Display estimated processing time (5-10 seconds for 1-minute audio)
-- Provide "Cancel" option for long uploads
-- Cache cleaned audio locally for replay
-
-### 3. Error Handling
-- Implement retry logic (max 3 attempts)
-- Show user-friendly error messages
-- Log errors for debugging
-- Provide fallback option (upload without cleaning)
-
-### 4. Performance
-- Compress audio before upload if possible
-- Use background threads for upload
-- Implement timeout (60 seconds)
-- Monitor API response times
+1. **Always resolve** relative `cleaned_url` before download.
+2. **Poll** when `cleaned_url` is empty but `job_id` is present.
+3. **Timeouts:** connect ~30 s, read ~120 s for upload+download; cap polling duration.
+4. **Haptics / UI:** show indeterminate progress until download completes.
+5. **Cache** cleaned files locally for replay and offline use.
 
 ---
 
 ## Testing
 
-### Test with Sample Audio
-
 ```bash
-# Test health check
 curl https://shadowselfwork.com/voice/health/
 
-# Test upload (replace with your WAV file)
-curl -X POST \
-  https://shadowselfwork.com/voice/clean/ \
+curl -X POST https://shadowselfwork.com/voice/clean/ \
   -F "file=@recording.wav" \
   -F "mode=standard"
 
-# Test job status
 curl https://shadowselfwork.com/voice/status/123/
 ```
 
@@ -521,18 +512,26 @@ curl https://shadowselfwork.com/voice/status/123/
 
 ## Support
 
-For issues or questions:
-- Check server health: `GET /voice/health/`
-- Review error messages in response
-- Contact development team for persistent issues
+- **`GET /voice/health/`** for availability
+- Inspect JSON `message` / `error_message` fields
+- Contact the backend team for persistent failures
 
 ---
 
-## Version History
+## Version history
 
-- **v1.0.0** (April 2026)
-  - Initial release
-  - RNNoise denoising
-  - EQ and compression
-  - Loudness normalization
-  - Three processing modes
+- **v2.2.0** (April 2026)
+  - Reel-first mobile flow (`Reel ★` primary)
+  - Optional adaptive/quality metadata in status payloads
+  - Phase-2 endpoints aligned with mobile (`extract`, `bg`, `reel`, `video`)
+
+- **v2.0.0** (April 2026)
+  - Modes: `basic`, `standard`, `studio`, `pro` (default `standard`)
+  - Multiformat uploads (MP3, M4A, WAV, OGG, FLAC)
+  - `processing_time` on clean success
+  - Job status API: `completed` | `processing` | `failed` with `cleaned_url` / `error_message`
+  - Relative `cleaned_url` paths — clients must resolve to absolute URLs
+  - Mobile integration doc aligned with app behavior (`VoiceCleaningApi`, preset → mode mapping)
+
+- **v1.0.0**
+  - Earlier contract (legacy); superseded by v2 for new integrations.

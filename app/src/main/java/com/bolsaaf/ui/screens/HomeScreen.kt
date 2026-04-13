@@ -3,6 +3,7 @@ package com.bolsaaf.ui.screens
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,9 +36,14 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -49,27 +55,44 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bolsaaf.ui.VibeUi
+import com.bolsaaf.ui.theme.AccentCyan
+import com.bolsaaf.ui.theme.AccentGreen
+import com.bolsaaf.ui.theme.AccentPurple
+import com.bolsaaf.ui.theme.BackgroundCard
+import com.bolsaaf.ui.theme.BackgroundDark
+import com.bolsaaf.ui.theme.CtaOrangeRedGradient
+import com.bolsaaf.ui.theme.NavUnselected
+import com.bolsaaf.ui.theme.PanelOverlay
+import com.bolsaaf.ui.theme.PrimaryGradient
+import com.bolsaaf.ui.theme.SliderTrack
+import com.bolsaaf.ui.theme.SliderTrackStrong
+import com.bolsaaf.ui.theme.SubtitleBluePurple
+import com.bolsaaf.ui.theme.SurfaceStripe
+import com.bolsaaf.ui.theme.TextPrimary
+import com.bolsaaf.ui.theme.TextSecondary
+import com.bolsaaf.ui.theme.ThemeBlue
+import com.bolsaaf.ui.theme.ThemeRed
+import com.bolsaaf.ui.theme.TitleVideoAccent
+import com.bolsaaf.audio.AdaptiveAudioAnalyzer
 import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.audio.WavPreview
+import com.bolsaaf.ui.animation.MD3Motion
+import com.bolsaaf.ui.animation.slideInFromStart
+import com.bolsaaf.ui.animation.slideInFromBottom
+import com.bolsaaf.ui.animation.slideOutToBottom
 import java.io.File
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-
-// New Premium Color Scheme
-val BackgroundDark = Color(0xFF0A0F1E)      // Deep blue background
-val BackgroundCard = Color(0xFF141B2D)      // Card background
-val AccentGreen = Color(0xFF00E676)         // Primary accent
-val AccentPurple = Color(0xFF9C27B0)        // Purple highlight
-val AccentCyan = Color(0xFF00BCD4)          // Cyan secondary
-val TextPrimary = Color(0xFFFFFFFF)         // White text
-val TextSecondary = Color(0xFF8B95A5)       // Gray text
 
 data class SaveInfo(
     val cleanedFileName: String,
@@ -90,6 +113,25 @@ fun HomeScreen(
     selectedFileName: String? = null,
     selectedTab: Int = 0,
     cleaningPreset: CleaningPreset = CleaningPreset.NORMAL,
+    modeAvailabilityNote: String? = null,
+    processingModes: List<String> = listOf(
+        "Make Reel ★",
+        "Quick clean",
+        "BG mix",
+        "Video"
+    ),
+    selectedProcessingModeIndex: Int = 0,
+    onProcessingModeChange: (Int) -> Unit = {},
+    showBackgroundControls: Boolean = false,
+    backgroundLabels: List<String> = emptyList(),
+    selectedBackgroundIndex: Int = 0,
+    onBackgroundIndexChange: (Int) -> Unit = {},
+    bgMixVolume: Float = 0.15f,
+    onBgMixVolumeChange: (Float) -> Unit = {},
+    processPrimaryButtonLabel: String = "Clean Audio",
+    processHelperText: String = "Tap to remove noise and enhance your audio file.",
+    processingDialogTitle: String = "Cleaning Audio...",
+    processingDialogSubtitle: String = "AI is removing noise and enhancing your audio. Please wait...",
     onCleaningPresetChange: (CleaningPreset) -> Unit = {},
     onStartRecording: () -> Unit = {},
     onStopRecording: () -> Unit = {},
@@ -106,40 +148,23 @@ fun HomeScreen(
     onStopFile: () -> Unit = {},
     onRemovePair: (String) -> Unit = {},
     onShareFile: (String) -> Unit = {},
-    onDownloadFile: (String) -> Unit = {}
+    onDownloadFile: (String) -> Unit = {},
+    onSubmitFeedback: (AudioPair, Boolean, String?, String?, String?) -> Unit = { _, _, _, _, _ -> },
+    adaptiveProfile: AdaptiveAudioAnalyzer.Profile? = null,
+    adaptiveAnalysisLoading: Boolean = false,
+    onApplyAdaptivePreset: () -> Unit = {},
+    onProminentReelClick: () -> Unit = {},
+    reelVariantFiles: Map<String, String> = emptyMap(),
+    onPlayReelVariant: (String) -> Unit = {},
+    onShareReelVariant: (String) -> Unit = {},
+    onDownloadReelVariant: (String) -> Unit = {}
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    
-    // Animated wave effect for recording state
-    val waveProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 2 * PI.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "wave"
-    )
-    
-    // Pulse effect for main button
-    // Keep record CTA layout stable while recording toggles.
-    val pulseScale = 1f
-    
-    // Rotating gradient animation
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(8000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
+    var feedbackPair by remember { mutableStateOf<AudioPair?>(null) }
     
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Animated gradient background
         Box(
@@ -148,15 +173,15 @@ fun HomeScreen(
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            BackgroundDark,
-                            BackgroundCard,
-                            BackgroundDark
+                            MaterialTheme.colorScheme.background,
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.background
                         )
                     )
                 )
         )
         
-        // Purple accent glow at top
+        // Primary accent glow at top
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -164,7 +189,7 @@ fun HomeScreen(
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            AccentPurple.copy(alpha = 0.15f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
                             Color.Transparent
                         ),
                         center = Offset(0.5f, 0f),
@@ -173,7 +198,7 @@ fun HomeScreen(
                 )
         )
         
-        // Cyan accent glow at bottom
+        // Secondary accent glow at bottom
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -182,7 +207,7 @@ fun HomeScreen(
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            AccentCyan.copy(alpha = 0.1f),
+                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.06f),
                             Color.Transparent
                         ),
                         center = Offset(0.5f, 1f),
@@ -217,88 +242,143 @@ fun HomeScreen(
                     selectedIndex = cleaningPreset.ordinal,
                     onModeSelected = { onCleaningPresetChange(CleaningPreset.fromIndex(it)) }
                 )
+                if (!modeAvailabilityNote.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = modeAvailabilityNote,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                if (showCleanButton && (adaptiveAnalysisLoading || adaptiveProfile != null)) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    SuggestedPresetChipRow(
+                        profile = adaptiveProfile,
+                        loading = adaptiveAnalysisLoading,
+                        currentPreset = cleaningPreset,
+                        onApply = onApplyAdaptivePreset,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                ModeSelector(
+                    modes = processingModes,
+                    selectedIndex = selectedProcessingModeIndex,
+                    onModeSelected = onProcessingModeChange
+                )
+
+                if (selectedProcessingModeIndex == 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "✨ 1 tap → reel ready",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onProminentReelClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Text(
+                        text = "Make Reel — recommended",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                if (showBackgroundControls) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Choose Vibe 🌊",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(horizontal = 32.dp)
+                    )
+                    if (!adaptiveAnalysisLoading && adaptiveProfile != null) {
+                        val vibeHint = VibeUi.suggestedVibeLine(adaptiveProfile)
+                        if (vibeHint != null) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = vibeHint,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = AccentGreen,
+                                modifier = Modifier.padding(horizontal = 32.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    if (backgroundLabels.isNotEmpty()) {
+                        ModeSelector(
+                            modes = backgroundLabels,
+                            selectedIndex = selectedBackgroundIndex.coerceIn(0, backgroundLabels.lastIndex),
+                            onModeSelected = onBackgroundIndexChange
+                        )
+                    } else {
+                        Text(
+                            text = "Loading vibes…",
+                            fontSize = 12.sp,
+                            color = Color(0xFFFFA726),
+                            modifier = Modifier.padding(horizontal = 32.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Vibe intensity  ${"%.0f".format(bgMixVolume * 100f)}%",
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(horizontal = 32.dp)
+                    )
+                    Slider(
+                        value = bgMixVolume,
+                        onValueChange = onBgMixVolumeChange,
+                        valueRange = 0.05f..0.45f,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Main recording button with glow effect
-                Box(
-                    modifier = Modifier.size(200.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Keep button visuals stable during record toggles (no expanding rings).
-                    
-                    // Main button with rotating gradient border
-                    Box(
-                        modifier = Modifier
-                            .size(180.dp)
-                            .scale(pulseScale)
-                            .clip(CircleShape)
-                            .background(
-                                brush = Brush.sweepGradient(
-                                    colors = listOf(
-                                        AccentGreen,
-                                        AccentCyan,
-                                        AccentPurple,
-                                        AccentGreen
-                                    ),
-                                    center = Offset(0.5f, 0.5f)
-                                )
-                            )
-                            .padding(4.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isRecording) 
-                                    Brush.radialGradient(
-                                        colors = listOf(AccentPurple, Color(0xFF7B1FA2))
-                                    )
-                                else 
-                                    Brush.radialGradient(
-                                        colors = listOf(BackgroundCard, BackgroundDark)
-                                    )
-                            )
-                            .clickable { 
-                                if (isRecording) onStopRecording() else onStartRecording()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        // Inner core (fixed size to prevent jump on click)
-                        Box(
-                            modifier = Modifier
-                                .size(140.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (isRecording)
-                                        AccentPurple.copy(alpha = 0.3f)
-                                    else
-                                        AccentGreen.copy(alpha = 0.2f)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = if (isRecording) Icons.Filled.Close else Icons.Filled.Add,
-                                    contentDescription = if (isRecording) "Stop" else "Record",
-                                    tint = if (isRecording) Color.White else AccentGreen,
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = if (isRecording) "Recording..." else "Tap to Clean",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = if (isRecording) "Noise clean ho rahi hai" else "Noise hatao, awaaz saaf karo",
-                                    fontSize = 11.sp,
-                                    color = TextSecondary
-                                )
-                            }
-                        }
+                HeroCleanPanel(
+                    isRecording = isRecording,
+                    cleaningPreset = cleaningPreset,
+                    helperText = if (isRecording) "Recording in progress" else "Tap to clean and polish",
+                    onCleanTap = {
+                        if (isRecording) onStopRecording() else onStartRecording()
                     }
-                }
-                
+                )
+
                 Spacer(modifier = Modifier.height(20.dp))
+
+                if (reelVariantFiles.isNotEmpty()) {
+                    ReelVariantsCard(
+                        reelVariantFiles = reelVariantFiles,
+                        onPlay = onPlayReelVariant,
+                        onShare = onShareReelVariant,
+                        onDownload = onDownloadReelVariant
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
                 
                 // Recent cleans header
                 Row(
@@ -310,15 +390,15 @@ fun HomeScreen(
                 ) {
                     Text(
                         "Recent Cleans",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontWeight = FontWeight.SemiBold
                     )
                     TextButton(onClick = onGoToHistory) {
                         Text(
                             "See All →",
-                            color = Color(0xFF00E676),
-                            fontSize = 14.sp
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -326,29 +406,42 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
             
-            items(audioPairs.take(3)) { pair ->
-                ComparisonCard(
-                    pair = pair,
-                    recordingsDir = recordingsDir,
-                    currentlyPlaying = currentlyPlaying,
-                    onPlayOriginal = { 
-                        if (currentlyPlaying == pair.originalFile) {
-                            onStopFile()
-                        } else {
-                            onPlayFile(pair.originalFile)
-                        }
-                    },
-                    onPlayCleaned = { 
-                        if (currentlyPlaying == pair.cleanedFile) {
-                            onStopFile()
-                        } else {
-                            onPlayFile(pair.cleanedFile)
-                        }
-                    },
-                    onRemove = { onRemovePair(pair.timestamp) },
-                    onShare = { onShareFile(pair.cleanedFile) },
-                    onDownload = { onDownloadFile(pair.cleanedFile) }
-                )
+            items(audioPairs.take(3), key = { it.timestamp }) { pair ->
+                val index = audioPairs.indexOf(pair)
+                AnimatedVisibility(
+                    visible = true,
+                    enter = slideInFromBottom() + fadeIn(
+                        animationSpec = tween(
+                            durationMillis = MD3Motion.StandardDurationMs,
+                            delayMillis = index * 100
+                        )
+                    ),
+                    exit = slideOutToBottom() + fadeOut()
+                ) {
+                    ComparisonCard(
+                        pair = pair,
+                        recordingsDir = recordingsDir,
+                        currentlyPlaying = currentlyPlaying,
+                        onPlayOriginal = { 
+                            if (currentlyPlaying == pair.originalFile) {
+                                onStopFile()
+                            } else {
+                                onPlayFile(pair.originalFile)
+                            }
+                        },
+                        onPlayCleaned = { 
+                            if (currentlyPlaying == pair.cleanedFile) {
+                                onStopFile()
+                            } else {
+                                onPlayFile(pair.cleanedFile)
+                            }
+                        },
+                        onRemove = { onRemovePair(pair.timestamp) },
+                        onShare = { onShareFile(pair.cleanedFile) },
+                        onDownload = { onDownloadFile(pair.cleanedFile) },
+                        onFeedback = { feedbackPair = pair }
+                    )
+                }
             }
             
             item {
@@ -425,6 +518,12 @@ fun HomeScreen(
         if (showCleanButton && !isCleaning) {
             CleanFileDialog(
                 fileName = selectedFileName ?: "File",
+                primaryButtonLabel = processPrimaryButtonLabel,
+                helperText = processHelperText,
+                cleaningPreset = cleaningPreset,
+                adaptiveProfile = adaptiveProfile,
+                adaptiveAnalysisLoading = adaptiveAnalysisLoading,
+                onApplyAdaptivePreset = onApplyAdaptivePreset,
                 onClean = onCleanFile,
                 onCancel = onCancelUpload
             )
@@ -432,7 +531,21 @@ fun HomeScreen(
         
         // Processing Dialog
         if (isCleaning) {
-            ProcessingDialog()
+            ProcessingDialog(
+                title = processingDialogTitle,
+                message = processingDialogSubtitle
+            )
+        }
+
+        feedbackPair?.let { pair ->
+            FeedbackDialog(
+                pair = pair,
+                onDismiss = { feedbackPair = null },
+                onSubmit = { clearVoice, issueType, issueTs, notes ->
+                    onSubmitFeedback(pair, clearVoice, issueType, issueTs, notes)
+                    feedbackPair = null
+                }
+            )
         }
     }
 }
@@ -442,80 +555,79 @@ fun GlassmorphicHeader(
     freeMinutesLeft: Int,
     onGoToHistory: () -> Unit
 ) {
-    Row(
+    ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                Color.White.copy(alpha = 0.05f)
-            )
-            .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        )
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(Color(0xFF00E676), Color(0xFF00C853))
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Filled.Add,
-                    contentDescription = null,
-                    tint = Color.Black,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    "BolSaaf",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Text(
-                    "AI Voice Cleaner",
-                    fontSize = 12.sp,
-                    color = Color(0xFFAAAAAA)
-                )
-            }
-        }
-        
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Surface(
-                color = Color(0xFF00E676).copy(alpha = 0.15f),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(
-                        Icons.Filled.Info,
+                        Icons.Filled.Add,
                         contentDescription = null,
-                        tint = Color(0xFF00E676),
-                        modifier = Modifier.size(14.dp)
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .padding(8.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
                     Text(
-                        "$freeMinutesLeft min free",
-                        fontSize = 12.sp,
-                        color = Color(0xFF00E676),
-                        fontWeight = FontWeight.Medium
+                        "BolSaaf",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
                     )
+                    Text(
+                        "Audio & Video Studio",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "$freeMinutesLeft min free",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }
@@ -524,24 +636,167 @@ fun GlassmorphicHeader(
 
 @Composable
 fun AnimatedTitle() {
-    val infiniteTransition = rememberInfiniteTransition(label = "title")
-    
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            "Studio jaisi awaaz",
-            fontSize = 32.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = Color.White,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            "Ghar baithe banao",
-            fontSize = 32.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = AccentGreen,
-            textAlign = TextAlign.Center
-        )
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(horizontal = 16.dp)
+    ) {
+        AnimatedVisibility(
+            visible = true,
+            enter = slideInFromStart() + fadeIn(
+                animationSpec = tween(MD3Motion.EmphasizedDurationMs)
+            ),
+            exit = slideOutToBottom() + fadeOut()
+        ) {
+            Text(
+                "Studio jaisi awaaz",
+                style = MaterialTheme.typography.displaySmall,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        AnimatedVisibility(
+            visible = true,
+            enter = slideInFromStart() + fadeIn(
+                animationSpec = tween(MD3Motion.StandardDurationMs, delayMillis = 100)
+            )
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Video",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = " + ",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Audio dono",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun HeroCleanPanel(
+    isRecording: Boolean,
+    cleaningPreset: CleaningPreset,
+    helperText: String,
+    onCleanTap: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        color = BackgroundCard,
+        shape = RoundedCornerShape(24.dp),
+        tonalElevation = 1.dp,
+        shadowElevation = 6.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .border(1.dp, SliderTrackStrong.copy(alpha = 0.35f), RoundedCornerShape(24.dp))
+                .padding(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "🎧 Reel ready voice",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = TextPrimary
+                )
+                Surface(
+                    color = SurfaceStripe,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = cleaningPreset.label,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = ThemeBlue
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Clean • Balanced • Natural",
+                fontSize = 14.sp,
+                color = TextSecondary
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(CtaOrangeRedGradient)
+                    .clickable { onCleanTap() }
+                    .padding(vertical = 14.dp, horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (isRecording) Icons.Filled.Close else Icons.Filled.Edit,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isRecording) "Stop Recording" else "Clean Audio / Video",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = if (isRecording) "Your voice is being captured" else helperText,
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.92f)
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White.copy(alpha = 0.22f)
+                ) {
+                    Text(
+                        text = "LIVE",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = helperText,
+                fontSize = 12.sp,
+                color = TextSecondary
+            )
+        }
     }
 }
 
@@ -557,11 +812,22 @@ fun QuickActionCard(
     onClick: () -> Unit = {}
 ) {
     val iconToUse = imageVector ?: icon ?: Icons.Default.Info
-    
+    val iconBg = when {
+        badge == "PRO" -> Color(0xFFFFF3E0)
+        isLoading -> SurfaceStripe
+        else -> ThemeBlue.copy(alpha = 0.1f)
+    }
+    val iconTint = when {
+        badge == "PRO" -> Color(0xFFFF8F00)
+        isLoading -> ThemeBlue
+        else -> ThemeRed
+    }
+
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF142414))
+            .background(BackgroundCard)
+            .border(1.dp, SliderTrackStrong.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
             .clickable(enabled = !isLoading) { onClick() }
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -570,27 +836,20 @@ fun QuickActionCard(
             modifier = Modifier
                 .size(48.dp)
                 .clip(CircleShape)
-                .background(
-                    if (badge == "PRO") 
-                        Brush.linearGradient(listOf(Color(0xFFFFB300), Color(0xFFFF8F00)))
-                    else if (isLoading)
-                        Brush.linearGradient(listOf(AccentCyan, AccentGreen))
-                    else 
-                        Brush.linearGradient(listOf(Color(0xFF00E676), Color(0xFF00C853)))
-                ),
+                .background(iconBg),
             contentAlignment = Alignment.Center
         ) {
             if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
-                    color = Color.Black,
+                    color = ThemeBlue,
                     strokeWidth = 2.dp
                 )
             } else {
                 Icon(
                     imageVector = iconToUse,
                     contentDescription = null,
-                    tint = Color.Black,
+                    tint = iconTint,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -600,12 +859,12 @@ fun QuickActionCard(
             title,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
-            color = if (isLoading) AccentCyan else Color.White
+            color = if (isLoading) ThemeBlue else TextPrimary
         )
         Text(
             subtitle,
             fontSize = 11.sp,
-            color = if (isLoading) AccentGreen else Color(0xFF888888),
+            color = TextSecondary,
             textAlign = TextAlign.Center
         )
     }
@@ -616,8 +875,8 @@ fun StatsSection() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         StatCard(
             modifier = Modifier.weight(1f),
@@ -649,28 +908,34 @@ fun StatCard(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF1A2E1A))
-            .padding(12.dp),
+            .clip(RoundedCornerShape(14.dp))
+            .background(BackgroundCard)
+            .border(
+                width = 1.dp,
+                color = SliderTrackStrong.copy(alpha = 0.45f),
+                shape = RoundedCornerShape(14.dp)
+            )
+            .padding(horizontal = 14.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = Color(0xFF00E676),
+            tint = ThemeBlue,
             modifier = Modifier.size(20.dp)
         )
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         Text(
             value,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = TextPrimary
         )
         Text(
             label,
             fontSize = 10.sp,
-            color = Color(0xFF888888)
+            color = TextSecondary,
+            textAlign = TextAlign.Center
         )
     }
 }
@@ -718,13 +983,13 @@ fun SuccessCleanBanner(info: SaveInfo) {
 }
 
 @Composable
-fun MiniWaveformStrip(cleanedWav: File, modifier: Modifier = Modifier) {
+fun MiniWaveformStrip(cleanedWav: File, modifier: Modifier = Modifier, barCount: Int = 32) {
     var bars by remember(cleanedWav.path) { mutableStateOf<List<Float>>(emptyList()) }
     LaunchedEffect(cleanedWav.path) {
-        bars = withContext(Dispatchers.IO) { WavPreview.loadBars(cleanedWav, 36) }
+        bars = withContext(Dispatchers.IO) { WavPreview.loadBars(cleanedWav, barCount) }
     }
     Row(
-        modifier = modifier.height(36.dp),
+        modifier = modifier.height(28.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.Bottom
     ) {
@@ -732,7 +997,7 @@ fun MiniWaveformStrip(cleanedWav: File, modifier: Modifier = Modifier) {
             LinearProgressIndicator(
                 modifier = Modifier.fillMaxWidth().height(3.dp),
                 color = AccentGreen.copy(alpha = 0.5f),
-                trackColor = Color(0xFF1A2540)
+                trackColor = SliderTrack
             )
         } else {
             bars.forEach { h ->
@@ -761,7 +1026,8 @@ fun ComparisonCard(
     onPlayCleaned: () -> Unit = {},
     onRemove: () -> Unit = {},
     onShare: () -> Unit = {},
-    onDownload: () -> Unit = {}
+    onDownload: () -> Unit = {},
+    onFeedback: () -> Unit = {}
 ) {
     val isOriginalPlaying = currentlyPlaying == pair.originalFile
     val isCleanedPlaying = currentlyPlaying == pair.cleanedFile
@@ -770,16 +1036,23 @@ fun ComparisonCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = BackgroundCard
-        ),
-        shape = RoundedCornerShape(20.dp)
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = BackgroundCard),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            // Header with timestamp and remove button
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(Brush.horizontalGradient(colors = listOf(ThemeRed, ThemeBlue)))
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -792,38 +1065,38 @@ fun ComparisonCard(
                         fontWeight = FontWeight.Medium,
                         color = TextSecondary
                     )
-                    if (pair.durationSec > 0.1f) {
+                    if (pair.durationSec > 0f) {
                         Text(
-                            String.format(Locale.US, "%.1f s", pair.durationSec),
+                            text = String.format(Locale.US, "%.1f s", pair.durationSec),
                             fontSize = 12.sp,
-                            color = AccentGreen.copy(alpha = 0.85f)
+                            color = AccentGreen.copy(alpha = 0.9f)
                         )
                     }
                 }
-
-                // Remove button
-                IconButton(
-                    onClick = onRemove,
-                    modifier = Modifier.size(28.dp)
+                Surface(
+                    color = if (pair.isRecording) AccentPurple.copy(alpha = 0.2f) else BackgroundCard,
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = "Remove",
-                        tint = Color(0xFFEF5350),
-                        modifier = Modifier.size(20.dp)
+                    Text(
+                        text = if (pair.isRecording) "Live" else "Processed",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (pair.isRecording) AccentPurple else AccentGreen
                     )
                 }
             }
 
-            MiniWaveformStrip(cleanedPath, modifier = Modifier.fillMaxWidth())
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Side by side comparison
+            MiniWaveformStrip(cleanedPath, modifier = Modifier.fillMaxWidth())
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // ORIGINAL (Left side)
                 AudioSideBox(
                     modifier = Modifier.weight(1f),
                     title = "🎤 Original",
@@ -832,8 +1105,6 @@ fun ComparisonCard(
                     onPlay = onPlayOriginal,
                     borderColor = Color(0xFFFF9800).copy(alpha = 0.5f)
                 )
-                
-                // CLEANED (Right side)
                 AudioSideBox(
                     modifier = Modifier.weight(1f),
                     title = "✨ Cleaned",
@@ -843,64 +1114,174 @@ fun ComparisonCard(
                     borderColor = AccentGreen.copy(alpha = 0.5f)
                 )
             }
-            
-            // Action buttons for cleaned file
-            Spacer(modifier = Modifier.height(12.dp))
-            
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                ActionButton(
+                VoiceActionPill(
+                    modifier = Modifier.weight(1f),
                     icon = Icons.AutoMirrored.Filled.Send,
                     label = "Share",
                     onClick = onShare
                 )
-                ActionButton(
-                    icon = Icons.Default.Info,
+                VoiceActionPill(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Filled.CheckCircle,
                     label = "Save",
                     onClick = onDownload
                 )
-                ActionButton(
+                VoiceActionPill(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Filled.Info,
+                    label = "Feedback",
+                    onClick = onFeedback
+                )
+                VoiceActionPill(
+                    modifier = Modifier.weight(1f),
                     icon = Icons.Filled.Close,
                     label = "Delete",
+                    tint = Color(0xFFEF5350),
                     onClick = onRemove
                 )
+            }
             }
         }
     }
 }
 
 @Composable
-fun ActionButton(
+fun VoiceActionPill(
+    modifier: Modifier = Modifier,
     icon: ImageVector,
     label: String,
+    tint: Color = AccentGreen,
     onClick: () -> Unit
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = SurfaceStripe,
+        modifier = modifier
+            .border(1.dp, SliderTrackStrong.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+            .clickable { onClick() }
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(AccentGreen.copy(alpha = 0.2f)),
-            contentAlignment = Alignment.Center
+                .padding(horizontal = 6.dp, vertical = 8.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = AccentGreen,
-                modifier = Modifier.size(20.dp)
+                tint = tint,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = label,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            color = TextSecondary
-        )
+    }
+}
+
+@Composable
+fun ReelVariantsCard(
+    reelVariantFiles: Map<String, String>,
+    onPlay: (String) -> Unit,
+    onShare: (String) -> Unit,
+    onDownload: (String) -> Unit
+) {
+    val order = listOf("viral_boosted", "with_bg", "clean_only")
+    val labels = mapOf(
+        "viral_boosted" to "Viral Boosted",
+        "with_bg" to "With BG",
+        "clean_only" to "Clean Only"
+    )
+    val available = order.mapNotNull { key -> reelVariantFiles[key]?.let { key to it } }
+    if (available.isEmpty()) return
+
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = BackgroundCard)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                text = "Reel Outputs Ready",
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Pick variant and play/share quickly",
+                color = TextSecondary,
+                fontSize = 12.sp
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            available.forEachIndexed { idx, (key, fileName) ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = SurfaceStripe
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(
+                            text = labels[key] ?: key,
+                            color = AccentGreen,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = fileName,
+                            color = TextSecondary,
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            VoiceActionPill(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Filled.PlayArrow,
+                                label = "Play",
+                                onClick = { onPlay(fileName) }
+                            )
+                            VoiceActionPill(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.AutoMirrored.Filled.Send,
+                                label = "Share",
+                                onClick = { onShare(fileName) }
+                            )
+                            VoiceActionPill(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Filled.CheckCircle,
+                                label = "Save",
+                                onClick = { onDownload(fileName) }
+                            )
+                        }
+                    }
+                }
+                if (idx != available.lastIndex) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        }
     }
 }
 
@@ -916,13 +1297,13 @@ fun AudioSideBox(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF1A2540))
+            .background(SurfaceStripe)
             .border(
                 width = if (isPlaying) 2.dp else 1.dp,
                 color = if (isPlaying) AccentGreen else borderColor,
                 shape = RoundedCornerShape(12.dp)
             )
-            .padding(12.dp),
+            .padding(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Title badge
@@ -935,19 +1316,21 @@ fun AudioSideBox(
         ) {
             Text(
                 text = title,
-                fontSize = 11.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Medium,
                 color = if (title.contains("Original")) Color(0xFFFF9800) else AccentGreen,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
         
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         
         // Play/Stop Button - Larger and more visible
         Box(
             modifier = Modifier
-                .size(56.dp)
+                .size(48.dp)
                 .clip(CircleShape)
                 .background(
                     if (isPlaying) 
@@ -985,17 +1368,17 @@ fun AudioSideBox(
                     imageVector = Icons.Filled.PlayArrow,
                     contentDescription = "Play",
                     tint = Color.White,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
         }
         
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         
         // Status text
         Text(
             text = if (isPlaying) "Playing..." else "Tap to play",
-            fontSize = 10.sp,
+            fontSize = 9.sp,
             color = if (isPlaying) AccentGreen else TextSecondary
         )
     }
@@ -1008,39 +1391,45 @@ fun BottomNavBar(
     onTabSelected: (Int) -> Unit = {}
 ) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = Color(0xFF0D1F0D)
+        modifier = modifier
+            .fillMaxWidth()
+            .border(1.dp, SliderTrackStrong.copy(alpha = 0.35f), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
+        color = BackgroundCard,
+        shadowElevation = 12.dp,
+        tonalElevation = 2.dp,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp, horizontal = 16.dp),
+                .padding(vertical = 14.dp, horizontal = 16.dp)
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            NavItem(
-                icon = Icons.Filled.Home,
-                label = "Cleaner",
-                isSelected = selectedTab == 0,
-                onClick = { onTabSelected(0) }
-            )
-            NavItem(
-                icon = Icons.Default.PlayArrow,  // Using PlayArrow as Mic alternative
-                label = "Live",
-                isSelected = selectedTab == 1,
-                onClick = { onTabSelected(1) }
-            )
-            NavItem(
-                icon = Icons.Filled.Menu,
-                label = "History",
-                isSelected = selectedTab == 2,
-                onClick = { onTabSelected(2) }
-            )
-            NavItem(
-                icon = Icons.Default.Person,
-                label = "Profile",
-                isSelected = selectedTab == 3,
-                onClick = { onTabSelected(3) }
-            )
+                NavItem(
+                    icon = Icons.Filled.Home,
+                    label = "Home",
+                    isSelected = selectedTab == 0,
+                    onClick = { onTabSelected(0) }
+                )
+                NavItem(
+                    icon = Icons.Default.PlayArrow,
+                    label = "Live",
+                    isSelected = selectedTab == 1,
+                    onClick = { onTabSelected(1) }
+                )
+                NavItem(
+                    icon = Icons.Filled.Menu,
+                    label = "History",
+                    isSelected = selectedTab == 2,
+                    onClick = { onTabSelected(2) }
+                )
+                NavItem(
+                    icon = Icons.Default.Person,
+                    label = "Profile",
+                    isSelected = selectedTab == 3,
+                    onClick = { onTabSelected(3) }
+                )
         }
     }
 }
@@ -1059,14 +1448,14 @@ fun NavItem(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = if (isSelected) Color(0xFF00E676) else Color(0xFF666666),
+            tint = if (isSelected) ThemeRed else NavUnselected,
             modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             label,
-            fontSize = 11.sp,
-            color = if (isSelected) Color(0xFF00E676) else Color(0xFF666666),
+            fontSize = 10.sp,
+            color = if (isSelected) ThemeRed else NavUnselected,
             fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
         )
         if (isSelected) {
@@ -1075,7 +1464,7 @@ fun NavItem(
                 modifier = Modifier
                     .size(4.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF00E676))
+                    .background(ThemeRed)
             )
         }
     }
@@ -1096,7 +1485,7 @@ fun AudioWaveformAnimation(modifier: Modifier = Modifier) {
             val alpha = (1f - (radius - 100f) / 320f).coerceIn(0f, 0.3f)
             
             drawCircle(
-                color = Color(0xFF00E676).copy(alpha = alpha),
+                color = ThemeBlue.copy(alpha = alpha),
                 radius = radius,
                 center = Offset(centerX, centerY),
                 style = Stroke(width = 2f)
@@ -1122,6 +1511,100 @@ data class AudioPair(
     val isRecording: Boolean = false,  // true = recording, false = upload
     val durationSec: Float = 0f
 )
+
+@Composable
+fun FeedbackDialog(
+    pair: AudioPair,
+    onDismiss: () -> Unit,
+    onSubmit: (Boolean, String?, String?, String?) -> Unit
+) {
+    val issueOptions = listOf("Quiet", "Artifacts", "Noise bacha", "Other")
+    var clearVoice by remember(pair.timestamp) { mutableStateOf(true) }
+    var issueType by remember(pair.timestamp) { mutableStateOf(issueOptions[0]) }
+    var issueTimestamp by remember(pair.timestamp) { mutableStateOf("") }
+    var notes by remember(pair.timestamp) { mutableStateOf("") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(containerColor = BackgroundCard),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Quick feedback", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    pair.cleanedFile,
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text("Voice clear hui?", color = TextSecondary, fontSize = 12.sp)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = clearVoice, onClick = { clearVoice = true }, label = { Text("Yes") })
+                    FilterChip(selected = !clearVoice, onClick = { clearVoice = false }, label = { Text("No") })
+                }
+
+                if (!clearVoice) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Issue type", color = TextSecondary, fontSize = 12.sp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        issueOptions.forEach { option ->
+                            FilterChip(
+                                selected = issueType == option,
+                                onClick = { issueType = option },
+                                label = { Text(option) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = issueTimestamp,
+                        onValueChange = { issueTimestamp = it },
+                        label = { Text("Issue timestamp (optional)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Notes (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            onSubmit(
+                                clearVoice,
+                                if (clearVoice) null else issueType,
+                                issueTimestamp,
+                                notes
+                            )
+                        }
+                    ) { Text("Send") }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun UploadProgressDialog(
@@ -1188,7 +1671,7 @@ fun UploadProgressDialog(
                         .height(8.dp)
                         .clip(RoundedCornerShape(4.dp)),
                     color = AccentGreen,
-                    trackColor = Color(0xFF1A2540)
+                    trackColor = SliderTrack
                 )
                 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1219,8 +1702,88 @@ fun UploadProgressDialog(
 }
 
 @Composable
+fun SuggestedPresetChipRow(
+    profile: AdaptiveAudioAnalyzer.Profile?,
+    loading: Boolean,
+    currentPreset: CleaningPreset,
+    onApply: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = SurfaceStripe,
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            if (loading) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        color = AccentCyan,
+                        strokeWidth = 2.dp
+                    )
+                    Text(
+                        text = "Checking levels for preset hint…",
+                        fontSize = 12.sp,
+                        color = TextSecondary
+                    )
+                }
+            }
+            profile?.let { p ->
+                Text(
+                    text = p.uiHeadline(),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Cloud mode: ${p.suggestedCloudMode}",
+                            fontSize = 12.sp,
+                            color = AccentCyan
+                        )
+                        Text(
+                            text = p.flags.joinToString(", "),
+                            fontSize = 10.sp,
+                            color = Color(0xFFFFB74D),
+                            maxLines = 2
+                        )
+                    }
+                    if (currentPreset != p.suggestedCleaningPreset) {
+                        TextButton(onClick = onApply) {
+                            Text("Apply", color = AccentGreen, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Text(
+                            text = "✓ Current",
+                            fontSize = 12.sp,
+                            color = AccentGreen,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun CleanFileDialog(
     fileName: String,
+    primaryButtonLabel: String = "Clean Audio",
+    helperText: String = "Tap 'Clean Audio' to remove noise and enhance your audio file",
+    cleaningPreset: CleaningPreset = CleaningPreset.NORMAL,
+    adaptiveProfile: AdaptiveAudioAnalyzer.Profile? = null,
+    adaptiveAnalysisLoading: Boolean = false,
+    onApplyAdaptivePreset: () -> Unit = {},
     onClean: () -> Unit,
     onCancel: () -> Unit
 ) {
@@ -1261,7 +1824,7 @@ fun CleanFileDialog(
                     "File Ready!",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = TextPrimary
                 )
                 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1277,11 +1840,22 @@ fun CleanFileDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
-                    "Tap 'Clean Audio' to remove noise and enhance your audio file",
+                    helperText,
                     fontSize = 12.sp,
                     color = TextSecondary,
                     textAlign = TextAlign.Center
                 )
+
+                if (adaptiveAnalysisLoading || adaptiveProfile != null) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    SuggestedPresetChipRow(
+                        profile = adaptiveProfile,
+                        loading = adaptiveAnalysisLoading,
+                        currentPreset = cleaningPreset,
+                        onApply = onApplyAdaptivePreset,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
@@ -1297,13 +1871,13 @@ fun CleanFileDialog(
                     Icon(
                         imageVector = Icons.Filled.PlayArrow,
                         contentDescription = null,
-                        tint = Color.Black,
+                        tint = Color.White,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        "Clean Audio",
-                        color = Color.Black,
+                        primaryButtonLabel,
+                        color = Color.White,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1328,7 +1902,10 @@ fun CleanFileDialog(
 }
 
 @Composable
-fun ProcessingDialog() {
+fun ProcessingDialog(
+    title: String = "Cleaning Audio...",
+    message: String = "AI is removing noise and enhancing your audio. Please wait..."
+) {
     Dialog(
         onDismissRequest = { },
         properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
@@ -1369,16 +1946,16 @@ fun ProcessingDialog() {
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 Text(
-                    "Cleaning Audio...",
+                    title,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = TextPrimary
                 )
                 
                 Spacer(modifier = Modifier.height(12.dp))
                 
                 Text(
-                    "AI is removing noise and enhancing your audio. Please wait...",
+                    message,
                     fontSize = 14.sp,
                     color = TextSecondary,
                     textAlign = TextAlign.Center

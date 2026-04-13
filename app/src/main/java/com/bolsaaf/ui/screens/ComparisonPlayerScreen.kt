@@ -27,6 +27,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import java.io.File
+import com.bolsaaf.ui.theme.AccentCyan
+import com.bolsaaf.ui.theme.AccentGreen
+import com.bolsaaf.ui.theme.AccentPurple
+import com.bolsaaf.ui.theme.BackgroundCard
+import com.bolsaaf.ui.theme.BackgroundDark
+import com.bolsaaf.ui.theme.TextPrimary
+import com.bolsaaf.ui.theme.TextSecondary
 
 @Composable
 fun ComparisonPlayerScreen(
@@ -218,7 +225,7 @@ fun ComparisonPlayerScreen(
                     onClick = { switchVersion(false) },
                     label = "Before",
                     subtitle = "Original",
-                    color = Color(0xFF666666)
+                    color = TextSecondary
                 )
 
                 // After Button
@@ -337,7 +344,7 @@ fun ComparisonPlayerScreen(
                     .padding(horizontal = 20.dp)
                     .height(60.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isPlayingCleaned) AccentGreen else Color(0xFF666666)
+                    containerColor = if (isPlayingCleaned) AccentGreen else TextSecondary
                 ),
                 shape = RoundedCornerShape(16.dp)
             ) {

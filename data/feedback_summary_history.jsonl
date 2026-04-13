@@ -1,0 +1,2 @@
+{"generated_at": "2026-04-10T03:13:55.574526+00:00", "total": 6, "by_result": {"artifacts": 2, "good": 4}, "by_mode": {"extract_voice": 4, "reel": 2}, "by_issue_type": {"Artifacts": 1, "none": 5}, "clear_voice_yes": 2, "clear_voice_no": 1}
+{"generated_at": "2026-04-13T03:56:14.322989+00:00", "total": 13, "by_result": {"quiet": 2, "artifacts": 6, "good": 5}, "by_mode": {"add_background": 2, "clean": 5, "extract_voice": 4, "reel": 2}, "by_issue_type": {"Quiet": 2, "Artifacts": 2, "Noise bacha": 3, "none": 6}, "clear_voice_yes": 3, "clear_voice_no": 7}

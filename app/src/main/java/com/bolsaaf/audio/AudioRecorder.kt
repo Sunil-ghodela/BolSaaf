@@ -7,6 +7,7 @@ import android.media.MediaRecorder
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
 import android.os.Build
+import android.util.Log
 import android.os.Process
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -86,6 +87,12 @@ class AudioRecorder(private val context: Context) {
         }
 
         audioRecord?.let { ar ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && ar.sampleRate != SAMPLE_RATE) {
+                Log.w(
+                    "AudioRecorder",
+                    "Mic opened at ${ar.sampleRate} Hz (requested $SAMPLE_RATE); resampling to 48k before RNNoise"
+                )
+            }
             if (NoiseSuppressor.isAvailable()) {
                 try {
                     noiseSuppressor = NoiseSuppressor.create(ar.audioSessionId)?.also { it.enabled = true }
@@ -148,33 +155,71 @@ class AudioRecorder(private val context: Context) {
     fun isRecording(): Boolean = isRecording
 
     private fun recordAudio(originalFile: File, cleanedFile: File) {
-        // Buffers for storing audio data
+        val ar = audioRecord ?: return
+        val actualRate = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            ar.sampleRate
+        } else {
+            SAMPLE_RATE
+        }
+        val needSrc = PcmResample.requiredSourceSamples(actualRate)
+
         val originalAudioData = ByteArrayOutputStream()
         val cleanedAudioData = ByteArrayOutputStream()
-        
-        // RNNoise requires exactly 480 samples per frame
-        val audioBuffer = ShortArray(FRAME_SIZE)
 
-        while (isRecording) {
-            val read = audioRecord?.read(audioBuffer, 0, FRAME_SIZE) ?: 0
-            if (read == FRAME_SIZE) {
-                val staged = audioBuffer.copyOf()
-                val preset = audioProcessor?.cleaningPreset ?: CleaningPreset.NORMAL
-                AudioInputStage.apply(staged, preset)
-                originalAudioData.write(shortsToBytes(staged))
+        var accum = ShortArray(4096)
+        var accumLen = 0
+        val readShorts = (bufferSize / 2).coerceAtLeast(FRAME_SIZE * 8)
+        val readBuf = ShortArray(readShorts)
 
-                val cleaned = staged.copyOf()
-                audioProcessor?.processStagedFrame(cleaned)
-                cleanedAudioData.write(shortsToBytes(cleaned))
+        fun appendToAccum(src: ShortArray, n: Int) {
+            if (accumLen + n > accum.size) {
+                accum = accum.copyOf((accumLen + n).coerceAtLeast(accum.size * 2))
+            }
+            src.copyInto(accum, accumLen, 0, n)
+            accumLen += n
+        }
 
-                onAudioDataCallback?.invoke(cleaned)
+        fun normalizeToRnFrame(samples: ShortArray): ShortArray {
+            if (samples.size == FRAME_SIZE) return samples
+            return ShortArray(FRAME_SIZE) { i ->
+                if (i < samples.size) samples[i] else 0
             }
         }
 
-        // Save both files
+        fun processAndWrite(frame48: ShortArray) {
+            val staged = frame48.copyOf()
+            val preset = audioProcessor?.cleaningPreset ?: CleaningPreset.NORMAL
+            AudioInputStage.apply(staged, preset)
+            originalAudioData.write(shortsToBytes(staged))
+            val cleaned = staged.copyOf()
+            audioProcessor?.processStagedFrame(cleaned)
+            cleanedAudioData.write(shortsToBytes(cleaned))
+            onAudioDataCallback?.invoke(cleaned)
+        }
+
+        while (isRecording) {
+            val read = ar.read(readBuf, 0, readBuf.size)
+            if (read > 0) {
+                appendToAccum(readBuf, read)
+                while (accumLen >= needSrc) {
+                    val srcChunk = accum.copyOfRange(0, needSrc)
+                    val frame48 = normalizeToRnFrame(PcmResample.resampleMonoTo48k(srcChunk, actualRate))
+                    processAndWrite(frame48)
+                    accum.copyInto(accum, 0, needSrc, accumLen)
+                    accumLen -= needSrc
+                }
+            }
+        }
+
+        if (accumLen > 0) {
+            val padded = ShortArray(needSrc) { i -> if (i < accumLen) accum[i] else 0 }
+            val frame48 = normalizeToRnFrame(PcmResample.resampleMonoTo48k(padded, actualRate))
+            processAndWrite(frame48)
+        }
+
         writeWavFile(originalAudioData.toByteArray(), originalFile)
         writeWavFile(cleanedAudioData.toByteArray(), cleanedFile)
-        
+
         onRecordingFinished?.invoke(originalFile, cleanedFile)
     }
 

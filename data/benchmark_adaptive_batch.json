@@ -1,0 +1,61 @@
+{
+  "count": 4,
+  "files": [
+    {
+      "rms_dbfs": -24.95,
+      "peak_dbfs": -21.94,
+      "crest_factor_db": 3.01,
+      "zero_sample_fraction": 0.0017,
+      "near_clip_fraction": 0.0,
+      "quiet_frame_fraction": 0.0,
+      "suggested_preset": "NORMAL",
+      "suggested_cloud_mode": "standard",
+      "flags": [
+        "default_balanced"
+      ],
+      "file": "/home/vaibhav/AppWork2026/BolSaaf/testdata/wav/sine_nominal.wav"
+    },
+    {
+      "rms_dbfs": -51.01,
+      "peak_dbfs": -47.96,
+      "crest_factor_db": 3.05,
+      "zero_sample_fraction": 0.005,
+      "near_clip_fraction": 0.0,
+      "quiet_frame_fraction": 1.0,
+      "suggested_preset": "STUDIO",
+      "suggested_cloud_mode": "pro",
+      "flags": [
+        "quiet_recording"
+      ],
+      "file": "/home/vaibhav/AppWork2026/BolSaaf/testdata/wav/sine_quiet.wav"
+    },
+    {
+      "rms_dbfs": -35.05,
+      "peak_dbfs": -30.31,
+      "crest_factor_db": 4.74,
+      "zero_sample_fraction": 0.0002,
+      "near_clip_fraction": 0.0,
+      "quiet_frame_fraction": 0.0,
+      "suggested_preset": "NORMAL",
+      "suggested_cloud_mode": "standard",
+      "flags": [
+        "default_balanced"
+      ],
+      "file": "/home/vaibhav/AppWork2026/BolSaaf/testdata/wav/sparse_noise.wav"
+    },
+    {
+      "rms_dbfs": -0.21,
+      "peak_dbfs": -0.21,
+      "crest_factor_db": 0.0,
+      "zero_sample_fraction": 0.0,
+      "near_clip_fraction": 1.0,
+      "quiet_frame_fraction": 0.0,
+      "suggested_preset": "STRONG",
+      "suggested_cloud_mode": "studio",
+      "flags": [
+        "hot_or_clipping"
+      ],
+      "file": "/home/vaibhav/AppWork2026/BolSaaf/testdata/wav/square_clip.wav"
+    }
+  ]
+}

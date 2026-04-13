@@ -1,25 +1,18 @@
 package com.bolsaaf.ui.screens
 
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,6 +28,9 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.random.Random
 import com.bolsaaf.audio.CleaningPreset
+import com.bolsaaf.ui.animation.MD3Motion
+import com.bolsaaf.ui.animation.slideInFromBottom
+import com.bolsaaf.ui.animation.slideOutToBottom
 
 /**
  * Live Recording Screen with real-time audio visualization
@@ -48,6 +44,7 @@ fun LiveScreen(
     audioPairs: List<AudioPair> = emptyList(),
     currentlyPlaying: String? = null,
     cleaningPreset: CleaningPreset = CleaningPreset.NORMAL,
+    modeAvailabilityNote: String? = null,
     onCleaningPresetChange: (CleaningPreset) -> Unit = {},
     onStartRecording: () -> Unit = {},
     onStopRecording: () -> Unit = {},
@@ -57,42 +54,45 @@ fun LiveScreen(
     onRemovePair: (String) -> Unit = {},
     onShareFile: (String) -> Unit = {},
     onDownloadFile: (String) -> Unit = {},
+    onSubmitFeedback: (AudioPair, Boolean, String?, String?, String?) -> Unit = { _, _, _, _, _ -> },
     onGoBack: () -> Unit = {}
 ) {
     val modes = listOf("Normal", "Strong", "Studio")
+    var feedbackPair by remember { mutableStateOf<AudioPair?>(null) }
     
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        // Animated gradient background
+        // Subtle solid overlay to keep depth without gradients
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            BackgroundDark,
-                            Color(0xFF0D1420),
-                            BackgroundDark
+                            MaterialTheme.colorScheme.background,
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.background
                         )
                     )
                 )
         )
         
-        // Purple accent glow at center
+        // Primary accent glow at top
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .height(250.dp)
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            AccentPurple.copy(alpha = 0.2f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
                             Color.Transparent
                         ),
-                        center = Offset(0.5f, 0.35f),
-                        radius = 0.6f
+                        center = Offset(0.5f, 0f),
+                        radius = 0.5f
                     )
                 )
         )
@@ -149,7 +149,7 @@ fun LiveScreen(
                             .background(
                                 brush = Brush.radialGradient(
                                     colors = listOf(
-                                        if (isRecording) AccentGreen.copy(alpha = 0.6f) else AccentPurple.copy(alpha = 0.4f),
+                                        if (isRecording) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f),
                                         Color.Transparent
                                     )
                                 ),
@@ -165,7 +165,7 @@ fun LiveScreen(
                         .border(
                             width = 3.dp,
                             brush = Brush.sweepGradient(
-                                colors = listOf(AccentGreen, AccentCyan, AccentPurple, AccentGreen)
+                                colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.primary)
                             ),
                             shape = CircleShape
                         )
@@ -174,8 +174,8 @@ fun LiveScreen(
                         .background(
                             brush = Brush.radialGradient(
                                 colors = listOf(
-                                    Color(0xFF1A2540),
-                                    Color(0xFF0D1420)
+                                    MaterialTheme.colorScheme.surfaceContainer,
+                                    MaterialTheme.colorScheme.surface
                                 )
                             )
                         ),
@@ -186,7 +186,7 @@ fun LiveScreen(
                         imageVector = if (isRecording) Icons.Default.Menu else Icons.Default.PlayArrow,
                         contentDescription = if (isRecording) "Live mic" else "Idle",
                         modifier = Modifier.size(80.dp),
-                        tint = if (isRecording) AccentGreen else AccentPurple
+                        tint = if (isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
                     )
                 }
                 
@@ -221,6 +221,14 @@ fun LiveScreen(
                 selectedIndex = cleaningPreset.ordinal,
                 onModeSelected = { onCleaningPresetChange(CleaningPreset.fromIndex(it)) }
             )
+            if (!modeAvailabilityNote.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = modeAvailabilityNote,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             
             Spacer(modifier = Modifier.height(32.dp))
             
@@ -235,14 +243,14 @@ fun LiveScreen(
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
-                        tint = if (isRecording) AccentGreen else TextSecondary,
+                        tint = if (isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(24.dp)
                     )
                     Text(
-                        if (isRecording) "LIVE CLEANING" else "Ready — tap record",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (isRecording) AccentGreen else TextSecondary
+                        if (isRecording) "🔴 LIVE CLEANING" else "✓ Ready — tap record",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 
@@ -256,13 +264,13 @@ fun LiveScreen(
                     Icon(
                         imageVector = Icons.Filled.Warning,
                         contentDescription = null,
-                        tint = Color(0xFFFFA726),
+                        tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
                         "Headphones recommended — less echo, cleaner preview",
-                        fontSize = 12.sp,
-                        color = TextSecondary.copy(alpha = 0.7f)
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
             }
@@ -283,12 +291,12 @@ fun LiveScreen(
                         "Recent Recordings",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
                         "${audioPairs.size} files",
                         fontSize = 12.sp,
-                        color = AccentGreen
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
                 
@@ -303,7 +311,8 @@ fun LiveScreen(
                         onPlayCleaned = { onPlayFile(pair.cleanedFile) },
                         onRemove = { onRemovePair(pair.timestamp) },
                         onShare = { onShareFile(pair.cleanedFile) },
-                        onDownload = { onDownloadFile(pair.cleanedFile) }
+                        onDownload = { onDownloadFile(pair.cleanedFile) },
+                        onFeedback = { feedbackPair = pair }
                     )
                 }
             }
@@ -343,7 +352,8 @@ fun LiveScreen(
                         .fillMaxSize()
                         .clip(CircleShape)
                         .background(
-                            if (isRecording) Color(0xFFEF5350) else AccentGreen
+                            if (isRecording) MaterialTheme.colorScheme.error 
+                            else MaterialTheme.colorScheme.primary
                         )
                         .clickable {
                             if (isRecording) onStopRecording() else onStartRecording()
@@ -354,7 +364,8 @@ fun LiveScreen(
                         imageVector = if (isRecording) Icons.Default.Close else Icons.Default.PlayArrow,
                         contentDescription = if (isRecording) "Stop live" else "Start live",
                         modifier = Modifier.size(48.dp),
-                        tint = Color.White
+                        tint = MaterialTheme.colorScheme.onError.takeIf { isRecording } 
+                            ?: MaterialTheme.colorScheme.onPrimary
                     )
                 }
             }
@@ -362,6 +373,17 @@ fun LiveScreen(
             Spacer(modifier = Modifier.height(40.dp))
         }
         
+        feedbackPair?.let { pair ->
+            FeedbackDialog(
+                pair = pair,
+                onDismiss = { feedbackPair = null },
+                onSubmit = { clearVoice, issueType, issueTs, notes ->
+                    onSubmitFeedback(pair, clearVoice, issueType, issueTs, notes)
+                    feedbackPair = null
+                }
+            )
+        }
+
         // Bottom navigation bar
         BottomNavBar(
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -393,57 +415,70 @@ fun StatsBar(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp),
-        color = Color(0xFF1A2540).copy(alpha = 0.8f),
+        color = Color.Transparent,
         shape = RoundedCornerShape(16.dp),
         shadowElevation = 8.dp
     ) {
-        Row(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
+                .background(
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .padding(1.dp)
         ) {
-            // Noise reduction
-            StatItem(
-                icon = Icons.Filled.Build,
-                iconColor = AccentCyan,
-                label = "Noise",
-                value = "↓ ${animatedNoise.toInt()}%",
-                isActive = isRecording
-            )
-            
-            Divider(
+            Row(
                 modifier = Modifier
-                    .height(30.dp)
-                    .width(1.dp),
-                color = TextSecondary.copy(alpha = 0.3f)
-            )
-            
-            // Clarity boost
-            StatItem(
-                icon = Icons.Default.Star,  // Using Star as alternative to TrendingUp
-                iconColor = AccentGreen,
-                label = "Clarity",
-                value = "↑ ${animatedClarity.toInt()}%",
-                isActive = isRecording
-            )
-            
-            Divider(
-                modifier = Modifier
-                    .height(30.dp)
-                    .width(1.dp),
-                color = TextSecondary.copy(alpha = 0.3f)
-            )
-            
-            // Latency
-            StatItem(
-                icon = Icons.Default.Info,  // Using Info as alternative to Schedule
-                iconColor = Color(0xFFFFA726),
-                label = "Latency",
-                value = "${latency}ms",
-                isActive = true
-            )
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StatItem(
+                    icon = Icons.Filled.Build,
+                    iconColor = MaterialTheme.colorScheme.tertiary,
+                    label = "Noise",
+                    value = "↓ ${animatedNoise.toInt()}%",
+                    isActive = isRecording
+                )
+
+                Divider(
+                    modifier = Modifier
+                        .height(30.dp)
+                        .width(1.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                )
+
+                StatItem(
+                    icon = Icons.Default.Star,
+                    iconColor = MaterialTheme.colorScheme.primary,
+                    label = "Clarity",
+                    value = "↑ ${animatedClarity.toInt()}%",
+                    isActive = isRecording
+                )
+
+                Divider(
+                    modifier = Modifier
+                        .height(30.dp)
+                        .width(1.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                )
+
+                StatItem(
+                    icon = Icons.Default.Info,
+                    iconColor = Color(0xFFFFA726),
+                    label = "Latency",
+                    value = "${latency}ms",
+                    isActive = true
+                )
+            }
         }
     }
 }
@@ -466,13 +501,13 @@ fun StatItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isActive) iconColor else TextSecondary,
+                tint = if (isActive) iconColor else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp)
             )
             Text(
                 label,
                 fontSize = 12.sp,
-                color = TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
@@ -480,7 +515,7 @@ fun StatItem(
             value,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            color = if (isActive) Color.White else TextSecondary.copy(alpha = 0.5f)
+            color = if (isActive) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
         )
     }
 }
@@ -491,45 +526,74 @@ fun ModeSelector(
     selectedIndex: Int,
     onModeSelected: (Int) -> Unit
 ) {
+    val scroll = rememberScrollState()
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 32.dp),
-        color = Color(0xFF1A2540),
+            .padding(horizontal = 24.dp),
+        color = Color.Transparent,
         shape = RoundedCornerShape(30.dp)
     ) {
-        Row(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+                .background(
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                    shape = RoundedCornerShape(30.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
+                    shape = RoundedCornerShape(30.dp)
+                )
+                .padding(1.dp)
         ) {
-            modes.forEachIndexed { index, mode ->
-                val isSelected = index == selectedIndex
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(26.dp))
-                        .background(
-                            brush = if (isSelected) {
-                                Brush.horizontalGradient(
-                                    colors = listOf(AccentGreen, AccentCyan.copy(alpha = 0.8f))
-                                )
-                            } else { 
-                                Brush.horizontalGradient(colors = listOf(Color.Transparent, Color.Transparent))
-                            },
-                            shape = RoundedCornerShape(26.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .horizontalScroll(scroll)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                modes.forEachIndexed { index, mode ->
+                    val isSelected = index == selectedIndex
+                    Box(
+                        modifier = Modifier
+                            .widthIn(min = 76.dp)
+                            .clip(RoundedCornerShape(26.dp))
+                            .background(
+                                brush = if (isSelected) {
+                                    Brush.horizontalGradient(colors = listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.primary))
+                                } else {
+                                    Brush.horizontalGradient(colors = listOf(Color.Transparent, Color.Transparent))
+                                },
+                                shape = RoundedCornerShape(26.dp)
+                            )
+                            .then(
+                                if (!isSelected) {
+                                    Modifier.border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                        RoundedCornerShape(26.dp)
+                                    )
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .clickable { onModeSelected(index) }
+                            .padding(horizontal = 14.dp, vertical = 11.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            mode,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            fontSize = 13.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        .clickable { onModeSelected(index) }
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        mode,
-                        fontSize = 14.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSelected) Color.Black else TextSecondary
-                    )
+                    }
                 }
             }
         }
@@ -606,10 +670,10 @@ fun WaveformBar(
     height: Float,
     delay: Int
 ) {
-    val color = remember { 
-        if (delay % 3 == 0) AccentGreen 
-        else if (delay % 3 == 1) AccentCyan 
-        else AccentPurple 
+    val color = when {
+        delay % 3 == 0 -> MaterialTheme.colorScheme.primary
+        delay % 3 == 1 -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.secondary
     }
     
     Box(
@@ -637,7 +701,8 @@ fun LiveRecordingCard(
     onPlayCleaned: () -> Unit,
     onRemove: () -> Unit,
     onShare: () -> Unit,
-    onDownload: () -> Unit
+    onDownload: () -> Unit,
+    onFeedback: () -> Unit
 ) {
     val isOriginalPlaying = currentlyPlaying == pair.originalFile
     val isCleanedPlaying = currentlyPlaying == pair.cleanedFile
@@ -647,13 +712,32 @@ fun LiveRecordingCard(
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = BackgroundCard
+            containerColor = Color.Transparent
         ),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(18.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                    shape = RoundedCornerShape(18.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(18.dp)
+                )
+                .padding(1.dp)
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(12.dp)
+            ) {
             // Header with timestamp and remove button
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -664,7 +748,7 @@ fun LiveRecordingCard(
                     text = pair.time,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 
                 IconButton(
@@ -702,7 +786,7 @@ fun LiveRecordingCard(
                     label = "Cleaned",
                     isPlaying = isCleanedPlaying,
                     onClick = onPlayCleaned,
-                    borderColor = AccentGreen
+                    borderColor = MaterialTheme.colorScheme.primary
                 )
             }
             
@@ -726,9 +810,15 @@ fun LiveRecordingCard(
                     label = "Save",
                     onClick = onDownload
                 )
+                LiveActionButton(
+                    icon = Icons.Default.Person,
+                    label = "Feedback",
+                    onClick = onFeedback
+                )
             }
         }
     }
+}
 }
 
 @Composable
@@ -742,10 +832,10 @@ fun LiveAudioButton(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF1A2540))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
             .border(
                 width = if (isPlaying) 2.dp else 1.dp,
-                color = if (isPlaying) AccentGreen else borderColor.copy(alpha = 0.5f),
+                color = if (isPlaying) MaterialTheme.colorScheme.primary else borderColor.copy(alpha = 0.5f),
                 shape = RoundedCornerShape(12.dp)
             )
             .clickable { onClick() }
@@ -757,9 +847,7 @@ fun LiveAudioButton(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(
-                    if (isPlaying) Color(0xFFEF5350) else AccentGreen
-                ),
+                .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f)),
             contentAlignment = Alignment.Center
         ) {
             if (isPlaying) {
@@ -796,7 +884,7 @@ fun LiveAudioButton(
         Text(
             text = label,
             fontSize = 11.sp,
-            color = if (isPlaying) AccentGreen else TextSecondary
+            color = MaterialTheme.colorScheme.onBackground
         )
     }
 }
@@ -815,13 +903,13 @@ fun LiveActionButton(
             modifier = Modifier
                 .size(36.dp)
                 .clip(CircleShape)
-                .background(AccentGreen.copy(alpha = 0.2f)),
+                .background(MaterialTheme.colorScheme.primary),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = AccentGreen,
+                tint = Color.White,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -829,8 +917,7 @@ fun LiveActionButton(
         Text(
             text = label,
             fontSize = 10.sp,
-            color = TextSecondary
+            color = MaterialTheme.colorScheme.onBackground
         )
     }
 }
-
