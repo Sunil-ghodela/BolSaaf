@@ -25,6 +25,23 @@ data class VoiceJobStatus(
     val errorMessage: String?
 )
 
+data class ReelV2VariantOutput(
+    val audioUrl: String?,
+    val videoUrl: String?,
+    val durationSec: Float?,
+    val loudnessLufs: Float?
+)
+
+data class ReelV2JobStatus(
+    val reelJobId: Int,
+    val status: String,
+    val currentStage: String?,
+    val overallProgress: Int,
+    val errorCode: String?,
+    val errorMessage: String?,
+    val outputs: Map<String, ReelV2VariantOutput>
+)
+
 data class VoiceBackground(
     val id: String,
     val label: String,
@@ -121,6 +138,105 @@ class VoiceApiPhase2Client(
         val fields = mutableMapOf("mode" to mode, "bg_volume" to bgVolume.toString())
         if (!backgroundId.isNullOrBlank()) fields["bg"] = backgroundId
         return submitJob(endpoint = "reel/", file = file, fields = fields)
+    }
+
+    fun createReelV2(
+        file: File,
+        requestedVariants: List<String> = listOf("clean_only", "with_bg", "viral_boosted"),
+        targetLufs: Float = -16f,
+        includeVideo: Boolean = false,
+        backgroundPreset: String? = null
+    ): VoiceJobAccepted {
+        require(file.exists()) { "Input file does not exist: ${file.absolutePath}" }
+        val endpoint = baseUrl.trimEnd('/') + "/reel/create/"
+        val boundary = "----WebKitFormBoundary${UUID.randomUUID()}"
+        val conn = URL(endpoint).openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+        conn.doOutput = true
+        conn.connectTimeout = CONNECT_TIMEOUT_MS
+        conn.readTimeout = READ_TIMEOUT_MS
+
+        conn.outputStream.use { out ->
+            out.write("--$boundary\r\n".toByteArray(Charsets.UTF_8))
+            out.write(
+                "Content-Disposition: form-data; name=\"file\"; filename=\"${file.name}\"\r\n".toByteArray(Charsets.UTF_8)
+            )
+            out.write("Content-Type: application/octet-stream\r\n\r\n".toByteArray(Charsets.UTF_8))
+            file.inputStream().use { it.copyTo(out) }
+            out.write("\r\n".toByteArray(Charsets.UTF_8))
+
+            out.write("--$boundary\r\n".toByteArray(Charsets.UTF_8))
+            out.write("Content-Disposition: form-data; name=\"requested_variants\"\r\n\r\n".toByteArray(Charsets.UTF_8))
+            out.write(requestedVariants.joinToString(",").toByteArray(Charsets.UTF_8))
+            out.write("\r\n".toByteArray(Charsets.UTF_8))
+
+            if (!backgroundPreset.isNullOrBlank()) {
+                out.write("--$boundary\r\n".toByteArray(Charsets.UTF_8))
+                out.write("Content-Disposition: form-data; name=\"background_preset\"\r\n\r\n".toByteArray(Charsets.UTF_8))
+                out.write(backgroundPreset.toByteArray(Charsets.UTF_8))
+                out.write("\r\n".toByteArray(Charsets.UTF_8))
+            }
+
+            out.write("--$boundary\r\n".toByteArray(Charsets.UTF_8))
+            out.write("Content-Disposition: form-data; name=\"target_lufs\"\r\n\r\n".toByteArray(Charsets.UTF_8))
+            out.write(targetLufs.toString().toByteArray(Charsets.UTF_8))
+            out.write("\r\n".toByteArray(Charsets.UTF_8))
+
+            out.write("--$boundary\r\n".toByteArray(Charsets.UTF_8))
+            out.write("Content-Disposition: form-data; name=\"include_video\"\r\n\r\n".toByteArray(Charsets.UTF_8))
+            out.write(includeVideo.toString().toByteArray(Charsets.UTF_8))
+            out.write("\r\n".toByteArray(Charsets.UTF_8))
+
+            out.write("--$boundary--\r\n".toByteArray(Charsets.UTF_8))
+        }
+
+        val code = conn.responseCode
+        val stream = if (code in 200..299) conn.inputStream else conn.errorStream ?: conn.inputStream
+        val body = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        Log.d(TAG, "createReelV2 code=$code body=${body.take(300)}")
+        if (code !in 200..299) throw VoiceCleaningException("Reel V2 create failed: HTTP $code $body")
+        val j = JSONObject(body)
+        return VoiceJobAccepted(
+            jobId = j.optInt("reel_job_id"),
+            jobType = "reel_v2",
+            message = j.optString("message", "Job accepted")
+        )
+    }
+
+    fun getReelV2Status(reelJobId: Int): ReelV2JobStatus {
+        val endpoint = baseUrl.trimEnd('/') + "/reel/$reelJobId/status/"
+        val conn = URL(endpoint).openConnection() as HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.connectTimeout = CONNECT_TIMEOUT_MS
+        conn.readTimeout = READ_TIMEOUT_MS
+        val code = conn.responseCode
+        val stream = if (code in 200..299) conn.inputStream else conn.errorStream ?: conn.inputStream
+        val body = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        if (code !in 200..299) throw VoiceCleaningException("Reel V2 status failed: HTTP $code $body")
+        val j = JSONObject(body)
+
+        val outputsObj = j.optJSONObject("outputs")
+        val outputs = linkedMapOf<String, ReelV2VariantOutput>()
+        listOf("clean_only", "with_bg", "viral_boosted").forEach { key ->
+            val o = outputsObj?.optJSONObject(key)
+            outputs[key] = ReelV2VariantOutput(
+                audioUrl = resolveUrlNullable(o?.optString("audio_url")),
+                videoUrl = resolveUrlNullable(o?.optString("video_url")),
+                durationSec = if (o != null && o.has("duration_sec")) o.optDouble("duration_sec").toFloat() else null,
+                loudnessLufs = if (o != null && o.has("loudness_lufs")) o.optDouble("loudness_lufs").toFloat() else null
+            )
+        }
+
+        return ReelV2JobStatus(
+            reelJobId = j.optInt("reel_job_id", reelJobId),
+            status = j.optString("status", "unknown"),
+            currentStage = j.optString("current_stage").ifBlank { null },
+            overallProgress = j.optInt("overall_progress", 0),
+            errorCode = j.optString("error_code").ifBlank { null },
+            errorMessage = j.optString("error_message").ifBlank { null },
+            outputs = outputs
+        )
     }
 
     fun processVideo(file: File, jobType: String = "video_reel", mode: String = "standard"): VoiceJobAccepted {

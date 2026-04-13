@@ -153,7 +153,11 @@ fun HomeScreen(
     adaptiveProfile: AdaptiveAudioAnalyzer.Profile? = null,
     adaptiveAnalysisLoading: Boolean = false,
     onApplyAdaptivePreset: () -> Unit = {},
-    onProminentReelClick: () -> Unit = {}
+    onProminentReelClick: () -> Unit = {},
+    reelVariantFiles: Map<String, String> = emptyMap(),
+    onPlayReelVariant: (String) -> Unit = {},
+    onShareReelVariant: (String) -> Unit = {},
+    onDownloadReelVariant: (String) -> Unit = {}
 ) {
     var feedbackPair by remember { mutableStateOf<AudioPair?>(null) }
     
@@ -365,6 +369,16 @@ fun HomeScreen(
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
+
+                if (reelVariantFiles.isNotEmpty()) {
+                    ReelVariantsCard(
+                        reelVariantFiles = reelVariantFiles,
+                        onPlay = onPlayReelVariant,
+                        onShare = onShareReelVariant,
+                        onDownload = onDownloadReelVariant
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
                 
                 // Recent cleans header
                 Row(
@@ -1175,6 +1189,98 @@ fun VoiceActionPill(
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
+        }
+    }
+}
+
+@Composable
+fun ReelVariantsCard(
+    reelVariantFiles: Map<String, String>,
+    onPlay: (String) -> Unit,
+    onShare: (String) -> Unit,
+    onDownload: (String) -> Unit
+) {
+    val order = listOf("viral_boosted", "with_bg", "clean_only")
+    val labels = mapOf(
+        "viral_boosted" to "Viral Boosted",
+        "with_bg" to "With BG",
+        "clean_only" to "Clean Only"
+    )
+    val available = order.mapNotNull { key -> reelVariantFiles[key]?.let { key to it } }
+    if (available.isEmpty()) return
+
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = BackgroundCard)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                text = "Reel Outputs Ready",
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Pick variant and play/share quickly",
+                color = TextSecondary,
+                fontSize = 12.sp
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            available.forEachIndexed { idx, (key, fileName) ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = SurfaceStripe
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(
+                            text = labels[key] ?: key,
+                            color = AccentGreen,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = fileName,
+                            color = TextSecondary,
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            VoiceActionPill(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Filled.PlayArrow,
+                                label = "Play",
+                                onClick = { onPlay(fileName) }
+                            )
+                            VoiceActionPill(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.AutoMirrored.Filled.Send,
+                                label = "Share",
+                                onClick = { onShare(fileName) }
+                            )
+                            VoiceActionPill(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Filled.CheckCircle,
+                                label = "Save",
+                                onClick = { onDownload(fileName) }
+                            )
+                        }
+                    }
+                }
+                if (idx != available.lastIndex) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
         }
     }
 }

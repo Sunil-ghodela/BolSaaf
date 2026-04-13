@@ -83,6 +83,9 @@ class MainActivity : ComponentActivity() {
     private var bgMixVolume by mutableStateOf(0.15f)
     private var lastAdaptiveProfile by mutableStateOf<AdaptiveAudioAnalyzer.Profile?>(null)
     private var adaptiveAnalysisLoading by mutableStateOf(false)
+    private var phase2StageName by mutableStateOf<String?>(null)
+    private var phase2OverallProgress by mutableIntStateOf(0)
+    private var latestReelVariantFiles by mutableStateOf<Map<String, String>>(emptyMap())
 
     // Store audio pairs for comparison (timestamp -> AudioPair)
     private var audioPairsList = mutableStateListOf<AudioPair>()
@@ -207,7 +210,11 @@ class MainActivity : ComponentActivity() {
                         onApplyAdaptivePreset = {
                             lastAdaptiveProfile?.let { cleaningPreset = it.suggestedCleaningPreset }
                         },
-                        onProminentReelClick = { processingFlow = ProcessingFlow.REEL_MODE }
+                        onProminentReelClick = { processingFlow = ProcessingFlow.REEL_MODE },
+                        reelVariantFiles = latestReelVariantFiles,
+                        onPlayReelVariant = { fileName -> playAudioFile(fileName) },
+                        onShareReelVariant = { fileName -> shareFile(fileName) },
+                        onDownloadReelVariant = { fileName -> downloadFile(fileName) }
                     )
                     1 -> LiveScreen(
                         isRecording = isRecording,
@@ -328,7 +335,11 @@ class MainActivity : ComponentActivity() {
                         onApplyAdaptivePreset = {
                             lastAdaptiveProfile?.let { cleaningPreset = it.suggestedCleaningPreset }
                         },
-                        onProminentReelClick = { processingFlow = ProcessingFlow.REEL_MODE }
+                        onProminentReelClick = { processingFlow = ProcessingFlow.REEL_MODE },
+                        reelVariantFiles = latestReelVariantFiles,
+                        onPlayReelVariant = { fileName -> playAudioFile(fileName) },
+                        onShareReelVariant = { fileName -> shareFile(fileName) },
+                        onDownloadReelVariant = { fileName -> downloadFile(fileName) }
                     )
                 }
             }
@@ -863,6 +874,9 @@ class MainActivity : ComponentActivity() {
             try {
                 saveOriginalFromUri(uri, originalFile)
                 isCleaning = true
+                phase2StageName = "queued"
+                phase2OverallProgress = 0
+                latestReelVariantFiles = emptyMap()
                 val mode = modeForPhase2Flow(cleaningPreset)
                 val accepted = when (flowSnapshot) {
                     ProcessingFlow.ADD_BACKGROUND -> voiceApiPhase2.addBackground(
@@ -871,35 +885,76 @@ class MainActivity : ComponentActivity() {
                         bgVolume = bgVolSnapshot,
                         mode = mode
                     )
-                    ProcessingFlow.REEL_MODE -> voiceApiPhase2.reelMode(
-                        originalFile,
-                        mode = mode,
-                        backgroundId = bgIdSnapshot,
-                        bgVolume = bgVolSnapshot
+                    ProcessingFlow.REEL_MODE -> voiceApiPhase2.createReelV2(
+                        file = originalFile,
+                        requestedVariants = listOf("clean_only", "with_bg", "viral_boosted"),
+                        targetLufs = -16f,
+                        includeVideo = false,
+                        backgroundPreset = bgIdSnapshot
                     )
                     ProcessingFlow.VIDEO_PROCESS -> voiceApiPhase2.processVideo(originalFile, mode = mode)
                     ProcessingFlow.CLEAN -> throw IllegalStateException("Invalid phase2 flow: CLEAN")
                 }
-                var status = voiceApiPhase2.getStatus(accepted.jobId)
-                var attempts = 0
-                val maxAttempts = if (flowSnapshot == ProcessingFlow.VIDEO_PROCESS) 120 else 80
-                while (status.status !in setOf("completed", "failed") && attempts < maxAttempts) {
-                    Thread.sleep(1500)
-                    status = voiceApiPhase2.getStatus(accepted.jobId)
-                    attempts++
-                }
-                if (status.status != "completed") {
-                    throw IllegalStateException(status.errorMessage ?: "Processing failed")
-                }
                 val outputUrl = when (flowSnapshot) {
-                    ProcessingFlow.VIDEO_PROCESS ->
-                        status.outputVideoUrl ?: status.outputAudioUrl ?: status.cleanedUrl
-                    else -> status.outputAudioUrl ?: status.cleanedUrl
-                } ?: throw IllegalStateException("No output url in completed job")
+                    ProcessingFlow.REEL_MODE -> {
+                        var status = voiceApiPhase2.getReelV2Status(accepted.jobId)
+                        var attempts = 0
+                        val maxAttempts = 120
+                        while (status.status !in setOf("completed", "failed") && attempts < maxAttempts) {
+                            phase2StageName = status.currentStage ?: "processing"
+                            phase2OverallProgress = status.overallProgress
+                            Thread.sleep(1500)
+                            status = voiceApiPhase2.getReelV2Status(accepted.jobId)
+                            attempts++
+                        }
+                        if (status.status != "completed") {
+                            throw IllegalStateException("${status.errorCode ?: "reel_failed"}: ${status.errorMessage ?: "Processing failed"}")
+                        }
+                        phase2StageName = status.currentStage ?: "completed"
+                        phase2OverallProgress = status.overallProgress
+                        val variantFiles = linkedMapOf<String, String>()
+                        status.outputs.forEach { (variant, output) ->
+                            val audioUrl = output.audioUrl ?: return@forEach
+                            val variantFile = File(outputDir, "cleaned_${timestamp}_${variant}.wav")
+                            downloadFromUrl(audioUrl, variantFile)
+                            variantFiles[variant] = variantFile.name
+                        }
+                        if (variantFiles.isNotEmpty()) {
+                            latestReelVariantFiles = variantFiles
+                        }
+                        val preferred = status.outputs["viral_boosted"]?.audioUrl
+                            ?: status.outputs["with_bg"]?.audioUrl
+                            ?: status.outputs["clean_only"]?.audioUrl
+                        preferred ?: throw IllegalStateException("No Reel V2 output url in completed job")
+                    }
+                    else -> {
+                        var status = voiceApiPhase2.getStatus(accepted.jobId)
+                        var attempts = 0
+                        val maxAttempts = if (flowSnapshot == ProcessingFlow.VIDEO_PROCESS) 120 else 80
+                        while (status.status !in setOf("completed", "failed") && attempts < maxAttempts) {
+                            Thread.sleep(1500)
+                            status = voiceApiPhase2.getStatus(accepted.jobId)
+                            attempts++
+                        }
+                        if (status.status != "completed") {
+                            throw IllegalStateException(status.errorMessage ?: "Processing failed")
+                        }
+                        when (flowSnapshot) {
+                            ProcessingFlow.VIDEO_PROCESS ->
+                                status.outputVideoUrl ?: status.outputAudioUrl ?: status.cleanedUrl
+                            else -> status.outputAudioUrl ?: status.cleanedUrl
+                        } ?: throw IllegalStateException("No output url in completed job")
+                    }
+                }
                 downloadFromUrl(outputUrl, outFile)
                 val dSec = mediaDurationSec(outFile)
                 runOnUiThread {
                     isCleaning = false
+                    phase2StageName = null
+                    phase2OverallProgress = 0
+                    if (flowSnapshot != ProcessingFlow.REEL_MODE) {
+                        latestReelVariantFiles = emptyMap()
+                    }
                     selectedFileUri = null
                     lastAdaptiveProfile = null
                     adaptiveAnalysisLoading = false
@@ -921,6 +976,9 @@ class MainActivity : ComponentActivity() {
                 Log.e(TAG, "processAudioFileWithPhase2Flow failed: ${e.message}", e)
                 runOnUiThread {
                     isCleaning = false
+                    phase2StageName = null
+                    phase2OverallProgress = 0
+                    latestReelVariantFiles = emptyMap()
                     Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -1040,12 +1098,24 @@ class MainActivity : ComponentActivity() {
     private fun processingDialogTitle(): String =
         when (processingFlow) {
             ProcessingFlow.VIDEO_PROCESS -> "Processing Video…"
+            ProcessingFlow.REEL_MODE -> {
+                val pct = phase2OverallProgress.coerceIn(0, 100)
+                if (pct > 0) "Making Reel… $pct%" else "Making Reel…"
+            }
             else -> "Processing…"
         }
 
     private fun processingDialogSubtitle(): String =
         when (processingFlow) {
             ProcessingFlow.VIDEO_PROCESS -> "Server is cleaning the audio track and rebuilding the file."
+            ProcessingFlow.REEL_MODE -> {
+                val stage = phase2StageName?.replace('_', ' ')?.replaceFirstChar { it.uppercase() }
+                if (stage.isNullOrBlank()) {
+                    "Analyzing → Cleaning → Mixing → Encoding"
+                } else {
+                    "Stage: $stage"
+                }
+            }
             else -> "Server job running — please wait…"
         }
 
