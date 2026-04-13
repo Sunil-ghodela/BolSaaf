@@ -138,11 +138,22 @@
 
 ## Next Priority (Execution Order)
 
-1. **Reel server finalization:** clean/extract + background + loudness (−16 LUFS) + **video export** in one stable reel pipeline.
-2. **UX status clarity:** stage-wise progress (`Analyzing → Cleaning → Mixing → Finalizing`) on Home processing dialog + upload path.
-3. **Adaptive tuning pass:** calibrate thresholds using daily 5 real takes (`data/BENCHMARK_REEL_5TAKE_TEMPLATE.md` + dated logs).
-4. **Quality robustness:** keep retry/dry-mix/floor; **48 kHz + 480-sample RN alignment on device** (done 2026-04-11); VAD-assisted decisions + optional dry/wet blend % tuning.
-5. **Extract / URL (when prioritized):** server `yt-dlp` + cookies (`YT_DLP_COOKIES`); restore app chip or tab; doc: `data/API_EXTRACT_FROM_URL.md`, deploy script `scripts/deploy_voice_url_extract/url_extract_service.py`.
+### Phase 3 Viral Engine Sprint (Execution Lock)
+
+- **Source roadmap:** `FEATURE_ROADMAP_PHASE3_VIRAL.md` (rewritten as v1 execution spec, scope lock + DoD).
+- **API contract locked:** `data/API_REEL_V2.md` (`/voice/reel/create` + `/voice/reel/{id}/status` + 3 variant outputs).
+- **V1 scope (must ship):** one-tap reel job, stage-wise progress, 3 outputs (`clean_only`, `with_bg`, `viral_boosted`), -16 LUFS target, 30-day expiry metadata.
+- **Defer:** whisper filler removal, advanced enhancer chain, full batch queue UX, auto-captions.
+- **Execution sequence:**
+  1. Backend: Reel V2 endpoint + stage machine + ReelJob/ReelOutput persistence
+  2. Android: CTA + stage timeline + 3-output results + share
+  3. QA: daily 5-take benchmark + reel smoke + failure metrics
+
+1. **Reel V2 backend:** implement `POST /voice/reel/create` + `GET /voice/reel/{id}/status` with stage machine and 3 variant outputs (see `data/API_REEL_V2.md`).
+2. **Android Reel V2 UX:** one-tap CTA + stage timeline + multi-output result/share screen.
+3. **Video parity:** ensure each requested variant can export MP4 (9:16 path where applicable) with stable retries/timeouts.
+4. **Adaptive tuning pass:** calibrate thresholds using daily 5 real takes (`data/BENCHMARK_REEL_5TAKE_TEMPLATE.md` + dated logs).
+5. **Quality robustness:** continue retry/dry-mix/floor + VAD/dry-wet iteration after V2 ship.
 
 
 
@@ -156,6 +167,20 @@
 
 ## Recent validation (server, 2026-04-13)
 
+- **Phase 3A scaffold live:** added server-side `ReelJob` + `ReelOutput` models and Reel V2 endpoints:
+  - `POST /voice/reel/create/`
+  - `GET /voice/reel/{reel_job_id}/status/`
+  - worker: `apps/voice/services/reel_v2.py`
+  - deploy script (repo): `scripts/deploy_reel_v2_scaffold_remote.py`
+- **Worker upgrade (2026-04-13, hotfix):** Reel V2 worker now calls real `run_reel_job` / `run_video_reel_job` per variant with timeout guards and stage transitions.
+- **Smoke test:** Reel V2 job accepted and completed with stage progress + analysis summary payload (`job_id=3`, variants requested: `clean_only`, `with_bg`).
+- **Stability note:** one syntax regression in `reel_v2.py` caused temporary `502`; fixed and service recovered (`/voice/health/` back to `ok`).
+- **Hardening pass (2026-04-13):**
+  - duplicate-safe `requested_variants` normalization (order preserved, de-dup)
+  - per-variant failure isolation in worker (`variant_errors` in `analysis_summary`; partial success allowed)
+  - timeout guards for audio/video variant processing
+  - `error_code` support in Reel V2 status for failed jobs
+  - TTL utility command added and validated: `manage.py cleanup_reel_expired`
 - **Deploy + restart:** `bash scripts/deploy_extract_voice_tuning.sh root@77.237.234.45` synced `extract_feedback_tuning.py` + `demucs_extract.py`; `deploy_extract_voice_tuning_remote.py` re-run (migrations up-to-date, patches idempotent). **Django `manage.py runserver 0.0.0.0:8000`** restarted under `nohup` for `/var/www/simplelms/backend`; **`GET /voice/health/`** verified **ok** after bounce.
 - **Demucs ↔ DB:** `ExtractVoiceTuningState` (singleton) stores `vocals_dry_ratio`; feedback drives blend strength for extract + reel Demucs paths.
 - SSH `root@77.237.234.45`: `https://shadowselfwork.com/voice/health/` returns **ok** (ffmpeg + DeepFilterNet; job types include reel / video_reel / extract_from_url).
