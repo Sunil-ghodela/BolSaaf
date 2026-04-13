@@ -1,6 +1,6 @@
 # BolSaaf Phase Progress Tracker
 
-**Last Updated**: 2026-04-13 (Material Design 3 System Phase Complete)
+**Last Updated**: 2026-04-13 (Reel V2 Android wired + release shipped)
 
 ## 🎨 LATEST: Material Design 3 Design System (April 13)
 
@@ -195,6 +195,14 @@
 - Outputs remain very quiet for ultra-low-input captures; this is now handled by retry + dry-mix + loudness floor, but thresholds still need tuning from real recordings.
 
 - Remote reel smoke: `POST /voice/reel/` with full fields accepted + completed (`job_id=24`, `job_type=reel`, `cleaned_url` returned).
+- **Android Reel V2 wiring (2026-04-13):**
+  - app Reel flow switched to `POST /voice/reel/create/` + polling `GET /voice/reel/{reel_job_id}/status/`
+  - processing dialog now shows live Reel stage + progress percent from backend status
+  - Home UI now renders multi-output Reel actions for `viral_boosted`, `with_bg`, `clean_only` (play/share/save)
+- **Build + install validation (2026-04-13):**
+  - compile: `./gradlew :app:compileDebugKotlin` ✅
+  - release build: `./gradlew :app:assembleRelease` ✅ (`app/build/outputs/apk/release/app-release.apk`, ~14 MB)
+  - device install: release APK installed on `Redmi_Note_7_Pro` (after uninstall due to debug/release signature mismatch)
 - Feedback API live and receiving real entries from app (refreshed **2026-04-13** via `scripts/feedback_report.py`):
   - total entries: **13**; clear_voice yes/no: **3 / 7**; by result: `good=5`, `artifacts=6`, `quiet=2`
   - modes: `clean=5`, `extract_voice=4`, `add_background=2`, `reel=2`
