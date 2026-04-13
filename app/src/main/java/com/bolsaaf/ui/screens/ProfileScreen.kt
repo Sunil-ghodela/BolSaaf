@@ -11,6 +11,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -24,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.ui.animation.MD3Motion
+import com.bolsaaf.ui.animation.slideInFromBottom
+import com.bolsaaf.ui.animation.slideInFromTop
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -66,39 +70,49 @@ fun ProfileScreen(
                 .padding(bottom = 100.dp)
         ) {
             Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            AnimatedVisibility(
+                visible = true,
+                enter = slideInFromTop() + fadeIn(animationSpec = MD3Motion.EmphasizedTween)
             ) {
-                Text(
-                    text = "Profile",
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                IconButton(onClick = onOpenSettings) {
-                    Icon(
-                        Icons.Filled.Settings,
-                        contentDescription = "Settings",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Profile",
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
                     )
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            Icons.Filled.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             // Identity card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .shadow(10.dp, RoundedCornerShape(24.dp)),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                shape = RoundedCornerShape(24.dp)
+            AnimatedVisibility(
+                visible = true,
+                enter = slideInFromBottom() + fadeIn(animationSpec = MD3Motion.StandardTween),
+                modifier = Modifier.fillMaxWidth()
             ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .shadow(10.dp, RoundedCornerShape(24.dp)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                    shape = RoundedCornerShape(24.dp)
+                ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -193,10 +207,16 @@ fun ProfileScreen(
                     }
                 }
             }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             // Plan / quota card
+            AnimatedVisibility(
+                visible = true,
+                enter = slideInFromBottom() + fadeIn(animationSpec = MD3Motion.StandardTween),
+                modifier = Modifier.fillMaxWidth()
+            ) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -300,9 +320,15 @@ fun ProfileScreen(
                     }
                 }
             }
+            }
 
             Spacer(modifier = Modifier.height(18.dp))
 
+            AnimatedVisibility(
+                visible = true,
+                enter = slideInFromBottom() + fadeIn(animationSpec = MD3Motion.ExpressiveTween),
+                modifier = Modifier.fillMaxWidth()
+            ) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -325,6 +351,7 @@ fun ProfileScreen(
                         lineHeight = 18.sp
                     )
                 }
+            }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
