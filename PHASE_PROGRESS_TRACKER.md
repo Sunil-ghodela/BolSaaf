@@ -81,7 +81,7 @@ Last updated: 2026-04-11
 | **3b** | **Done (chip):** After file pick, Home + “File ready” dialog show **Suggested preset** row (levels check) with **Apply**; uses capped WAV export (~30s) for analysis. |
 | **3c** | **Done (runtime):** adaptive preset is applied automatically for each processed audio; still needs threshold tuning from real clips. |
 | **3d** | Server-side adaptive mode pick using same metrics on upload. |
-| **3e** | Use feedback trend (`artifacts/smoothness`) to auto-adjust extract defaults weekly. |
+| **3e** | **Live (2026-04-13):** server `ExtractVoiceTuningState` + `extract_feedback_tuning.py` — rolling stats from `VoiceFeedback` (`extract_voice`, `reel`, `reel_mode`) update **`vocals_dry_ratio`** (original mixed into Demucs vocals via ffmpeg `amix`, EMA-smoothed). Applied in `demucs_extract.run_extract_voice_job` and `reel_mode._maybe_extract_voice`. Recompute on feedback POST (async) and throttled at extract start. Deploy: `scripts/deploy_extract_voice_tuning.sh` + `deploy_extract_voice_tuning_remote.py`. |
 
 ---
 
@@ -140,6 +140,7 @@ Last updated: 2026-04-11
 
 ## Recent validation (server, 2026-04-13)
 
+- **Demucs ↔ DB:** `ExtractVoiceTuningState` (singleton) stores `vocals_dry_ratio`; feedback drives blend strength for extract + reel Demucs paths.
 - SSH `root@77.237.234.45`: `https://shadowselfwork.com/voice/health/` returns **ok** (ffmpeg + DeepFilterNet; job types include reel / video_reel / extract_from_url).
 - **Loudness:** `reel_mode.py` + `video_process.py` use **2-pass `loudnorm`** default **−16 LUFS**; `ffmpeg` lists **EBU R128 loudnorm** filter.
 - **yt-dlp:** system `2026.03.17` present; venv has package installed.
