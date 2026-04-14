@@ -32,6 +32,7 @@ import com.bolsaaf.audio.ProcessingQualityGuard
 import com.bolsaaf.audio.VoiceBackground
 import com.bolsaaf.audio.VoiceCleaningApi
 import com.bolsaaf.ui.screens.CleanItem
+import com.bolsaaf.ui.screens.FastLibTestScreen
 import com.bolsaaf.ui.screens.HomeScreen
 import com.bolsaaf.ui.screens.ProfileScreen
 import com.bolsaaf.ui.screens.SettingsDialog
@@ -92,6 +93,11 @@ class MainActivity : ComponentActivity() {
     private var userEmail by mutableStateOf<String?>(null)
     private var userDisplayName by mutableStateOf("You")
     private var userHandle by mutableStateOf("@bolsaaf")
+    private var fastLibInputUri by mutableStateOf<Uri?>(null)
+    private var fastLibInputIsVideo by mutableStateOf(false)
+    private var fastLibInputLabel by mutableStateOf<String?>(null)
+    private var fastLibIsCleaning by mutableStateOf(false)
+    private var fastLibOutputFileName by mutableStateOf<String?>(null)
 
     // Store audio pairs for comparison (timestamp -> AudioPair)
     private var audioPairsList = mutableStateListOf<AudioPair>()
@@ -110,6 +116,28 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.GetContent()
     ) { uri: Uri? -> uri?.let { handlePickedMediaUri(it) } }
 
+    private val pickFastAudioLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            fastLibInputUri = it
+            fastLibInputIsVideo = false
+            fastLibInputLabel = getFileName(it)
+            fastLibOutputFileName = null
+        }
+    }
+
+    private val pickFastVideoLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            fastLibInputUri = it
+            fastLibInputIsVideo = true
+            fastLibInputLabel = getFileName(it)
+            fastLibOutputFileName = null
+        }
+    }
+
     private fun handlePickedMediaUri(uri: Uri) {
         selectedFileUri = uri
         lastAdaptiveProfile = null
@@ -124,6 +152,14 @@ class MainActivity : ComponentActivity() {
             ProcessingFlow.VIDEO_PROCESS -> pickVideoLauncher.launch("video/*|audio/*")
             else -> pickAudioLauncher.launch("audio/*|video/*")
         }
+    }
+
+    private fun openFastAudioPicker() {
+        pickFastAudioLauncher.launch("audio/*")
+    }
+
+    private fun openFastVideoPicker() {
+        pickFastVideoLauncher.launch("video/*")
     }
 
     private fun milderCloudMode(current: String, available: Set<String>): String? {
@@ -282,6 +318,20 @@ class MainActivity : ComponentActivity() {
                         onOpenSettings = { showSettingsDialog() },
                         onLogin = { email, password -> handleLogin(email, password) },
                         onLogout = { handleLogout() }
+                    )
+                    4 -> FastLibTestScreen(
+                        selectedTab = selectedTab,
+                        selectedFileLabel = fastLibInputLabel,
+                        isVideoInput = fastLibInputIsVideo,
+                        isCleaning = fastLibIsCleaning,
+                        outputFileName = fastLibOutputFileName,
+                        onUploadAudio = { openFastAudioPicker() },
+                        onUploadVideo = { openFastVideoPicker() },
+                        onStartCleaning = { startFastLibTestCleaning() },
+                        onPlayOutput = { fastLibOutputFileName?.let { playAudioFile(it) } },
+                        onShareOutput = { fastLibOutputFileName?.let { shareFile(it) } },
+                        onSaveOutput = { fastLibOutputFileName?.let { downloadFile(it) } },
+                        onTabSelected = { tab -> selectedTab = tab }
                     )
                     else -> HomeScreen(
                         recordingsDir = recDir,
@@ -445,6 +495,71 @@ class MainActivity : ComponentActivity() {
         userDisplayName = "You"
         userHandle = "@bolsaaf"
         Toast.makeText(this, "Logged out successfully", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun startFastLibTestCleaning() {
+        val uri = fastLibInputUri ?: return
+        val outputDir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "BolSaaf")
+        if (!outputDir.exists()) outputDir.mkdirs()
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val inputFile = File(outputDir, "fastlib_input_$timestamp${guessExtensionForUri(uri)}")
+        val outFile = if (fastLibInputIsVideo) {
+            File(outputDir, "fastlib_cleaned_$timestamp.mp4")
+        } else {
+            File(outputDir, "fastlib_cleaned_$timestamp.wav")
+        }
+
+        Thread {
+            try {
+                saveOriginalFromUri(uri, inputFile)
+                runOnUiThread { fastLibIsCleaning = true }
+                if (fastLibInputIsVideo) {
+                    val accepted = voiceApiPhase2.fastLibVideoProcess(inputFile)
+                    var status = voiceApiPhase2.getStatus(accepted.jobId)
+                    var attempts = 0
+                    while (status.status !in setOf("completed", "failed") && attempts < 120) {
+                        Thread.sleep(1500)
+                        status = voiceApiPhase2.getStatus(accepted.jobId)
+                        attempts++
+                    }
+                    if (status.status != "completed") {
+                        throw IllegalStateException(status.errorMessage ?: "Video cleaning failed")
+                    }
+                    val outputUrl = status.outputVideoUrl ?: status.outputAudioUrl ?: status.cleanedUrl
+                        ?: throw IllegalStateException("No output url for video cleaning")
+                    downloadFromUrl(outputUrl, outFile)
+                } else {
+                    val accepted = voiceApiPhase2.fastLibClean(inputFile)
+                    var status = voiceApiPhase2.getStatus(accepted.jobId)
+                    var attempts = 0
+                    while (status.status !in setOf("completed", "failed") && attempts < 120) {
+                        Thread.sleep(1500)
+                        status = voiceApiPhase2.getStatus(accepted.jobId)
+                        attempts++
+                    }
+                    if (status.status != "completed") {
+                        throw IllegalStateException(status.errorMessage ?: "Audio cleaning failed")
+                    }
+                    val outputUrl = status.outputAudioUrl ?: status.cleanedUrl
+                        ?: throw IllegalStateException("No output url for audio cleaning")
+                    downloadFromUrl(outputUrl, outFile)
+                }
+
+                val duration = mediaDurationSec(outFile)
+                runOnUiThread {
+                    fastLibIsCleaning = false
+                    fastLibOutputFileName = outFile.name
+                    addAudioPair(timestamp, inputFile, outFile, isRecording = false)
+                    Toast.makeText(this, "Fast Lib test clean done · ${"%.1f".format(duration)}s", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "startFastLibTestCleaning failed: ${e.message}", e)
+                runOnUiThread {
+                    fastLibIsCleaning = false
+                    Toast.makeText(this, "Fast Lib test failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
     }
 
     private fun startRecording() {
