@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.ui.animation.MD3Motion
+import com.bolsaaf.ui.components.BottomNavBar
 import com.bolsaaf.ui.animation.slideInFromBottom
 import com.bolsaaf.ui.animation.slideInFromTop
 import java.text.SimpleDateFormat
@@ -97,7 +98,7 @@ fun ProfileScreen(
                 ) {
                     Text(
                         text = "Profile",
-                        fontSize = 26.sp,
+                        style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
@@ -149,7 +150,7 @@ fun ProfileScreen(
                         ) {
                             Text(
                                 text = displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "B",
-                                fontSize = 28.sp,
+                                style = MaterialTheme.typography.headlineMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -157,13 +158,13 @@ fun ProfileScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = displayName,
-                                fontSize = 20.sp,
+                                style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
                             Text(
                                 text = userHandle,
-                                fontSize = 14.sp,
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(8.dp))
@@ -189,7 +190,7 @@ fun ProfileScreen(
                                     )
                                     Text(
                                         text = if (showProMemberBadge) "Pro Member" else "Free plan",
-                                        fontSize = 12.sp,
+                                        style = MaterialTheme.typography.bodySmall,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
                                     )
@@ -247,7 +248,7 @@ fun ProfileScreen(
                     ) {
                         Text(
                             text = if (showProMemberBadge) "Pro Plan" else "Free plan",
-                            fontSize = 17.sp,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground
                         )
@@ -258,7 +259,7 @@ fun ProfileScreen(
                             Text(
                                 text = "Active",
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                fontSize = 11.sp,
+                                style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFFFB74D)
                             )
@@ -267,7 +268,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "Renews on $renewalLabel",
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(14.dp))
@@ -275,10 +276,10 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Free minutes left", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Free minutes left", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(
                             text = "$freeMinutesLeft / $freeQuotaMinutes",
-                            fontSize = 13.sp,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground
                         )
@@ -328,7 +329,7 @@ fun ProfileScreen(
                                 text = "Upgrade plan",
                                 color = Color.Black,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp
+                                style = MaterialTheme.typography.titleSmall
                             )
                         }
                     }
@@ -353,14 +354,14 @@ fun ProfileScreen(
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
                         text = "💎 Real insight",
-                        fontSize = 15.sp,
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Reel mode bundles clean + vibe + loudness in one flow. Preset: ${cleaningPreset.label} — tune from Home when you want a calmer or stronger pass.",
-                        fontSize = 13.sp,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
                     )
@@ -397,12 +398,12 @@ fun ProfileScreen(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = "Logged in as",
-                                        fontSize = 12.sp,
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
                                         text = userEmail,
-                                        fontSize = 14.sp,
+                                        style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onBackground
                                     )
@@ -422,7 +423,7 @@ fun ProfileScreen(
                         } else {
                             Text(
                                 text = "Sign in to sync your data",
-                                fontSize = 14.sp,
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(12.dp))
@@ -485,14 +486,14 @@ fun LoginDialog(
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(
                     text = "Login",
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Sign in with your email",
-                    fontSize = 12.sp,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(20.dp))
@@ -543,13 +544,13 @@ private fun ProfileStatBlock(value: String, label: String, valueColor: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = value,
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = valueColor
         )
         Text(
             text = label,
-            fontSize = 11.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp)
         )

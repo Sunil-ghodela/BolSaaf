@@ -53,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -86,6 +87,7 @@ import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.audio.WavPreview
 import com.bolsaaf.ui.animation.MD3Motion
 import com.bolsaaf.ui.animation.slideInFromStart
+import com.bolsaaf.ui.components.BottomNavBar
 import com.bolsaaf.ui.animation.slideInFromBottom
 import com.bolsaaf.ui.animation.slideOutToBottom
 import java.io.File
@@ -237,62 +239,47 @@ fun HomeScreen(
                 // Animated title
                 AnimatedTitle()
 
-                Spacer(modifier = Modifier.height(16.dp))
-                val presetModes = listOf("Normal", "Strong", "Studio")
-                ModeSelector(
-                    modes = presetModes,
-                    selectedIndex = cleaningPreset.ordinal,
-                    onModeSelected = { onCleaningPresetChange(CleaningPreset.fromIndex(it)) }
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Primary action grid — one glance, one tap.
+                // Collapses the old two-parallel-mode-selector design (cleaning preset row +
+                // processing mode row + separate MakeReelBanner) into one clear CTA per action.
+                ActionGrid(
+                    onMakeReel = {
+                        onProcessingModeChange(0)
+                        onProminentReelClick()
+                    },
+                    onQuickClean = {
+                        onProcessingModeChange(1)
+                        onUploadFile()
+                    },
+                    onAddVibe = {
+                        onProcessingModeChange(2)
+                        onUploadFile()
+                    },
+                    onVideoClean = {
+                        onProcessingModeChange(3)
+                        onUploadFile()
+                    }
                 )
+
                 if (!modeAvailabilityNote.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = modeAvailabilityNote,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-
-                if (showCleanButton && (adaptiveAnalysisLoading || adaptiveProfile != null)) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    SuggestedPresetChipRow(
-                        profile = adaptiveProfile,
-                        loading = adaptiveAnalysisLoading,
-                        currentPreset = cleaningPreset,
-                        onApply = onApplyAdaptivePreset,
-                        modifier = Modifier.padding(horizontal = 20.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                ModeSelector(
-                    modes = processingModes,
-                    selectedIndex = selectedProcessingModeIndex,
-                    onModeSelected = onProcessingModeChange
-                )
-
-                if (selectedProcessingModeIndex == 0) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "✨ 1 tap → reel ready",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.error,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp)
+                            .padding(horizontal = 20.dp)
                     )
                 }
-
-                // Banner-style Make Reel CTA
-                MakeReelBanner(onClick = onProminentReelClick)
 
                 if (showBackgroundControls) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "Choose Vibe 🌊",
-                        fontSize = 13.sp,
+                        style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = TextSecondary,
                         modifier = Modifier.padding(horizontal = 32.dp)
@@ -303,7 +290,7 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = vibeHint,
-                                fontSize = 12.sp,
+                                style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Medium,
                                 color = AccentGreen,
                                 modifier = Modifier.padding(horizontal = 32.dp)
@@ -320,7 +307,7 @@ fun HomeScreen(
                     } else {
                         Text(
                             text = "Loading vibes…",
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFFFFA726),
                             modifier = Modifier.padding(horizontal = 32.dp)
                         )
@@ -328,7 +315,7 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Vibe intensity  ${"%.0f".format(bgMixVolume * 100f)}%",
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                         modifier = Modifier.padding(horizontal = 32.dp)
                     )
@@ -347,7 +334,7 @@ fun HomeScreen(
                 HeroCleanPanel(
                     isRecording = isRecording,
                     cleaningPreset = cleaningPreset,
-                    helperText = if (isRecording) "Recording in progress" else "Tap to clean and polish",
+                    helperText = if (isRecording) "Recording… tap stop when done" else "Record with real-time noise cleaning",
                     onCleanTap = {
                         if (isRecording) onStopRecording() else onStartRecording()
                     }
@@ -432,21 +419,14 @@ fun HomeScreen(
             item {
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Quick action cards
+                // Footer actions row — Batch (Pro) + Settings.
+                // The old Upload card was redundant with the ActionGrid above.
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    QuickActionCard(
-                        modifier = Modifier.weight(1f),
-                        imageVector = if (isUploading) Icons.Rounded.Refresh else Icons.AutoMirrored.Filled.Send,
-                        title = if (isUploading) "Uploading..." else "Upload",
-                        subtitle = if (isUploading) "Processing file..." else "File se clean karo",
-                        isLoading = isUploading,
-                        onClick = onUploadFile
-                    )
                     QuickActionCard(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Filled.Edit,
@@ -458,7 +438,7 @@ fun HomeScreen(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Filled.Settings,
                         title = "Settings",
-                        subtitle = "Customize karo",
+                        subtitle = "Customize",
                         onClick = onOpenSettings
                     )
                 }
@@ -532,6 +512,186 @@ fun HomeScreen(
                     feedbackPair = null
                 }
             )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ActionGrid: the primary "what do you want to do?" hub on Home.
+// Design notes (2026-04-14):
+// - Replaces two competing mode-selector chip rows + a separate "Make Reel"
+//   banner that the UX audit flagged as confusing on first visit.
+// - Single highlighted hero card (Make Reel) + three secondary cards.
+// - Each card self-describes: icon + title + 1-line hint. No cryptic labels
+//   like "BG" or "Quick".
+// ---------------------------------------------------------------------------
+@Composable
+fun ActionGrid(
+    onMakeReel: () -> Unit,
+    onQuickClean: () -> Unit,
+    onAddVibe: () -> Unit,
+    onVideoClean: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+    ) {
+        // Hero card — Make Reel (recommended)
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 96.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(CtaOrangeRedGradient)
+                .clickable(onClick = onMakeReel)
+                .semantics { },
+            color = Color.Transparent
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color.White.copy(alpha = 0.22f),
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Make Reel",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.White.copy(alpha = 0.22f)
+                        ) {
+                            Text(
+                                "RECOMMENDED",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "One tap → clean voice + background + loudness",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.92f)
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Send,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Secondary action row — 3 cards, each self-describing.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            SecondaryActionCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Filled.PlayArrow,
+                title = "Quick Clean",
+                hint = "Remove noise",
+                onClick = onQuickClean
+            )
+            SecondaryActionCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Filled.Home,
+                title = "Add Vibe",
+                hint = "Mix rain, cafe, ocean",
+                onClick = onAddVibe
+            )
+            SecondaryActionCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Filled.PlayArrow,
+                title = "Video Clean",
+                hint = "Clean audio in video",
+                onClick = onVideoClean
+            )
+        }
+    }
+}
+
+@Composable
+private fun SecondaryActionCard(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    title: String,
+    hint: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier
+            .defaultMinSize(minHeight = 96.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 1.dp,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = hint,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -703,8 +863,8 @@ fun HeroCleanPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "🎧 Reel ready voice",
-                    fontSize = 20.sp,
+                    text = "🎙️ Record live",
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold,
                     color = TextPrimary
                 )
@@ -715,7 +875,7 @@ fun HeroCleanPanel(
                     Text(
                         text = cleaningPreset.label,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,
                         color = ThemeBlue
                     )
@@ -725,8 +885,8 @@ fun HeroCleanPanel(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "Clean • Balanced • Natural",
-                fontSize = 14.sp,
+                text = "On-device RNNoise, no upload needed",
+                style = MaterialTheme.typography.bodyMedium,
                 color = TextSecondary
             )
 
@@ -742,7 +902,7 @@ fun HeroCleanPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (isRecording) Icons.Filled.Close else Icons.Filled.Edit,
+                    imageVector = if (isRecording) Icons.Filled.Close else Icons.Filled.PlayArrow,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(28.dp)
@@ -750,14 +910,14 @@ fun HeroCleanPanel(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isRecording) "Stop Recording" else "Clean Audio / Video",
-                        fontSize = 16.sp,
+                        text = if (isRecording) "Stop Recording" else "Start Recording",
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Text(
                         text = if (isRecording) "Your voice is being captured" else helperText,
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.92f)
                     )
                 }
@@ -768,7 +928,7 @@ fun HeroCleanPanel(
                     Text(
                         text = "LIVE",
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        fontSize = 10.sp,
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
@@ -779,7 +939,7 @@ fun HeroCleanPanel(
 
             Text(
                 text = helperText,
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
         }
@@ -843,13 +1003,13 @@ fun QuickActionCard(
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             title,
-            fontSize = 14.sp,
+            style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
             color = if (isLoading) ThemeBlue else TextPrimary
         )
         Text(
             subtitle,
-            fontSize = 11.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = TextSecondary,
             textAlign = TextAlign.Center
         )
@@ -913,13 +1073,13 @@ fun StatCard(
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             value,
-            fontSize = 16.sp,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = TextPrimary
         )
         Text(
             label,
-            fontSize = 10.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = TextSecondary,
             textAlign = TextAlign.Center
         )
@@ -947,20 +1107,20 @@ fun SuccessCleanBanner(info: SaveInfo) {
             Column {
                 Text(
                     "Cleaned & saved",
-                    fontSize = 15.sp,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
                 Text(
                     info.cleanedFileName,
-                    fontSize = 12.sp,
+                    style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
                 Text(
                     String.format(Locale.US, "%.1f s · %s", info.durationSec, info.timestamp),
-                    fontSize = 11.sp,
+                    style = MaterialTheme.typography.labelSmall,
                     color = AccentGreen.copy(alpha = 0.9f)
                 )
             }
@@ -1064,14 +1224,14 @@ fun ComparisonCard(
                 Column {
                     Text(
                         text = pair.time,
-                        fontSize = 14.sp,
+                        style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = TextSecondary
                     )
                     if (pair.durationSec > 0f) {
                         Text(
                             text = String.format(Locale.US, "%.1f s", pair.durationSec),
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.bodySmall,
                             color = AccentGreen.copy(alpha = 0.9f)
                         )
                     }
@@ -1083,7 +1243,7 @@ fun ComparisonCard(
                     Text(
                         text = if (pair.isRecording) "Live" else "Processed",
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        fontSize = 10.sp,
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = if (pair.isRecording) AccentPurple else AccentGreen
                     )
@@ -1185,7 +1345,7 @@ fun VoiceActionPill(
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = label,
-                fontSize = 10.sp,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
                 color = TextPrimary,
                 maxLines = 1,
@@ -1224,13 +1384,13 @@ fun ReelVariantsCard(
                 text = "Reel Outputs Ready",
                 color = TextPrimary,
                 fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
+                style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Pick variant and play/share quickly",
                 color = TextSecondary,
-                fontSize = 12.sp
+                style = MaterialTheme.typography.bodySmall
             )
             Spacer(modifier = Modifier.height(10.dp))
             available.forEachIndexed { idx, (key, fileName) ->
@@ -1244,12 +1404,12 @@ fun ReelVariantsCard(
                             text = labels[key] ?: key,
                             color = AccentGreen,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp
+                            style = MaterialTheme.typography.bodySmall
                         )
                         Text(
                             text = fileName,
                             color = TextSecondary,
-                            fontSize = 10.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -1318,7 +1478,7 @@ fun AudioSideBox(
         ) {
             Text(
                 text = title,
-                fontSize = 10.sp,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
                 color = if (title.contains("Original")) Color(0xFFFF9800) else AccentGreen,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
@@ -1380,97 +1540,14 @@ fun AudioSideBox(
         // Status text
         Text(
             text = if (isPlaying) "Playing..." else "Tap to play",
-            fontSize = 9.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = if (isPlaying) AccentGreen else TextSecondary
         )
     }
 }
 
-@Composable
-fun BottomNavBar(
-    modifier: Modifier = Modifier,
-    selectedTab: Int = 0,
-    onTabSelected: (Int) -> Unit = {}
-) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .border(1.dp, SliderTrackStrong.copy(alpha = 0.35f), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
-        color = BackgroundCard,
-        shadowElevation = 12.dp,
-        tonalElevation = 2.dp,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 14.dp, horizontal = 16.dp)
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-                NavItem(
-                    icon = Icons.Filled.Home,
-                    label = "Home",
-                    isSelected = selectedTab == 0,
-                    onClick = { onTabSelected(0) }
-                )
-                NavItem(
-                    icon = Icons.Default.PlayArrow,
-                    label = "Live",
-                    isSelected = selectedTab == 1,
-                    onClick = { onTabSelected(1) }
-                )
-                NavItem(
-                    icon = Icons.Filled.Menu,
-                    label = "History",
-                    isSelected = selectedTab == 2,
-                    onClick = { onTabSelected(2) }
-                )
-                NavItem(
-                    icon = Icons.Default.Person,
-                    label = "Profile",
-                    isSelected = selectedTab == 3,
-                    onClick = { onTabSelected(3) }
-                )
-        }
-    }
-}
-
-@Composable
-fun NavItem(
-    icon: ImageVector,
-    label: String,
-    isSelected: Boolean = false,
-    onClick: () -> Unit = {}
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = if (isSelected) ThemeRed else NavUnselected,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            label,
-            fontSize = 10.sp,
-            color = if (isSelected) ThemeRed else NavUnselected,
-            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
-        )
-        if (isSelected) {
-            Spacer(modifier = Modifier.height(2.dp))
-            Box(
-                modifier = Modifier
-                    .size(4.dp)
-                    .clip(CircleShape)
-                    .background(ThemeRed)
-            )
-        }
-    }
-}
+// BottomNavBar + NavItem moved to ui/components/BottomNavBar.kt (2026-04-14)
+// — shared by HomeScreen, LiveScreen, HistoryScreen, ProfileScreen.
 
 @Composable
 fun AudioWaveformAnimation(modifier: Modifier = Modifier) {
@@ -1535,17 +1612,17 @@ fun FeedbackDialog(
             shape = RoundedCornerShape(20.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Quick feedback", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("Quick feedback", color = TextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     pair.cleanedFile,
                     color = TextSecondary,
-                    fontSize = 12.sp,
+                    style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Text("Voice clear hui?", color = TextSecondary, fontSize = 12.sp)
+                Text("Voice clear hui?", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = clearVoice, onClick = { clearVoice = true }, label = { Text("Yes") })
                     FilterChip(selected = !clearVoice, onClick = { clearVoice = false }, label = { Text("No") })
@@ -1553,7 +1630,7 @@ fun FeedbackDialog(
 
                 if (!clearVoice) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("Issue type", color = TextSecondary, fontSize = 12.sp)
+                    Text("Issue type", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1648,7 +1725,7 @@ fun UploadProgressDialog(
                 
                 Text(
                     "Uploading File...",
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
@@ -1657,7 +1734,7 @@ fun UploadProgressDialog(
                 
                 Text(
                     fileName,
-                    fontSize = 14.sp,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary,
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
@@ -1680,7 +1757,7 @@ fun UploadProgressDialog(
                 
                 Text(
                     "$progress%",
-                    fontSize = 18.sp,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = AccentGreen
                 )
@@ -1695,7 +1772,7 @@ fun UploadProgressDialog(
                     Text(
                         "Cancel Upload",
                         color = Color(0xFFEF5350),
-                        fontSize = 16.sp
+                        style = MaterialTheme.typography.titleMedium
                     )
                 }
             }
@@ -1729,7 +1806,7 @@ fun SuggestedPresetChipRow(
                     )
                     Text(
                         text = "Checking levels for preset hint…",
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
                 }
@@ -1737,7 +1814,7 @@ fun SuggestedPresetChipRow(
             profile?.let { p ->
                 Text(
                     text = p.uiHeadline(),
-                    fontSize = 14.sp,
+                    style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
@@ -1749,12 +1826,12 @@ fun SuggestedPresetChipRow(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Cloud mode: ${p.suggestedCloudMode}",
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.bodySmall,
                             color = AccentCyan
                         )
                         Text(
                             text = p.flags.joinToString(", "),
-                            fontSize = 10.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             color = Color(0xFFFFB74D),
                             maxLines = 2
                         )
@@ -1766,7 +1843,7 @@ fun SuggestedPresetChipRow(
                     } else {
                         Text(
                             text = "✓ Current",
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.bodySmall,
                             color = AccentGreen,
                             fontWeight = FontWeight.Medium
                         )
@@ -1824,7 +1901,7 @@ fun CleanFileDialog(
                 
                 Text(
                     "File Ready!",
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
@@ -1833,7 +1910,7 @@ fun CleanFileDialog(
                 
                 Text(
                     fileName,
-                    fontSize = 14.sp,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary,
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
@@ -1843,7 +1920,7 @@ fun CleanFileDialog(
                 
                 Text(
                     helperText,
-                    fontSize = 12.sp,
+                    style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                     textAlign = TextAlign.Center
                 )
@@ -1880,7 +1957,7 @@ fun CleanFileDialog(
                     Text(
                         primaryButtonLabel,
                         color = Color.White,
-                        fontSize = 16.sp,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -1895,7 +1972,7 @@ fun CleanFileDialog(
                     Text(
                         "Cancel",
                         color = TextSecondary,
-                        fontSize = 14.sp
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
@@ -1949,7 +2026,7 @@ fun ProcessingDialog(
                 
                 Text(
                     title,
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
@@ -1958,7 +2035,7 @@ fun ProcessingDialog(
                 
                 Text(
                     message,
-                    fontSize = 14.sp,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary,
                     textAlign = TextAlign.Center
                 )
@@ -2007,7 +2084,7 @@ fun MakeReelBanner(
                         .background(Color.White.copy(alpha = 0.2f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("✨", fontSize = 18.sp)
+                    Text("✨", style = MaterialTheme.typography.titleMedium)
                 }
 
                 Column(
@@ -2015,13 +2092,13 @@ fun MakeReelBanner(
                 ) {
                     Text(
                         text = "Make Reel — recommended",
-                        fontSize = 16.sp,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Text(
                         text = "1 tap mein reel ready",
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.85f)
                     )
                 }
@@ -2064,14 +2141,14 @@ fun SettingsDialog(
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
                     text = "Settings",
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Customize your experience",
-                    fontSize = 12.sp,
+                    style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
                 Spacer(modifier = Modifier.height(20.dp))
@@ -2120,7 +2197,7 @@ fun SettingsDialog(
                     Text(
                         text = "Close",
                         color = MaterialTheme.colorScheme.primary,
-                        fontSize = 16.sp,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -2158,13 +2235,13 @@ fun SettingsOption(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    fontSize = 14.sp,
+                    style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = TextPrimary
                 )
                 Text(
                     text = subtitle,
-                    fontSize = 12.sp,
+                    style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
             }

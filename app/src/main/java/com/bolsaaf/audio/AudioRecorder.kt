@@ -130,7 +130,10 @@ class AudioRecorder(private val context: Context) {
         }
         // Wait for record loop to finish before release (avoid use-after-release crash)
         try {
-            recordingThread?.join(5000)
+            recordingThread?.join(10_000)
+            if (recordingThread?.isAlive == true) {
+                Log.w("AudioRecorder", "stopRecording: record thread still alive after 10s join; releasing anyway")
+            }
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
         }

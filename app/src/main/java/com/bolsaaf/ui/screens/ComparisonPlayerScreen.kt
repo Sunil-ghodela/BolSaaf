@@ -165,7 +165,7 @@ fun ComparisonPlayerScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     "Before vs After",
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
@@ -200,7 +200,7 @@ fun ComparisonPlayerScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             "✨ Voice Enhanced!",
-                            fontSize = 18.sp,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = AccentGreen
                         )
@@ -290,7 +290,7 @@ fun ComparisonPlayerScreen(
 
                     Text(
                         if (isPlayingCleaned) "✨ Clean Audio" else "🔊 Original Audio",
-                        fontSize = 16.sp,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium,
                         color = if (isPlayingCleaned) AccentGreen else Color.Gray
                     )
@@ -324,12 +324,12 @@ fun ComparisonPlayerScreen(
                     Text(
                         formatTime(currentPosition.toInt()),
                         color = TextSecondary,
-                        fontSize = 12.sp
+                        style = MaterialTheme.typography.bodySmall
                     )
                     Text(
                         formatTime(duration.toInt()),
                         color = TextSecondary,
-                        fontSize = 12.sp
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
@@ -357,7 +357,7 @@ fun ComparisonPlayerScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     if (isPlaying) "Pause" else "Play",
-                    fontSize = 18.sp,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
                 )
@@ -418,13 +418,13 @@ fun VersionToggleButton(
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             label,
-            fontSize = 16.sp,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = if (isSelected) color else Color.White
         )
         Text(
             subtitle,
-            fontSize = 12.sp,
+            style = MaterialTheme.typography.bodySmall,
             color = TextSecondary
         )
     }
@@ -433,17 +433,17 @@ fun VersionToggleButton(
 @Composable
 fun StatBadge(icon: String, label: String, sublabel: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(icon, fontSize = 24.sp)
+        Text(icon, style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             label,
-            fontSize = 14.sp,
+            style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
             color = Color.White
         )
         Text(
             sublabel,
-            fontSize = 10.sp,
+            style = MaterialTheme.typography.labelSmall,
             color = TextSecondary
         )
     }

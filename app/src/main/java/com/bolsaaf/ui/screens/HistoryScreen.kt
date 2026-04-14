@@ -18,11 +18,12 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.foundation.border
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.foundation.border
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -41,21 +42,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bolsaaf.ui.components.BottomNavBar
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import com.bolsaaf.ui.theme.AccentCyan
-import com.bolsaaf.ui.theme.AccentGreen
-import com.bolsaaf.ui.theme.AccentPurple
-import com.bolsaaf.ui.theme.BackgroundCard
-import com.bolsaaf.ui.theme.BackgroundDark
-import com.bolsaaf.ui.theme.SurfaceStripe
-import com.bolsaaf.ui.theme.TextPrimary
-import com.bolsaaf.ui.theme.TextSecondary
-import com.bolsaaf.ui.theme.ThemeBlue
-import com.bolsaaf.ui.theme.ThemeRed
-import com.bolsaaf.ui.theme.SliderTrackStrong
 
 private enum class HistoryFilter { All, Audio, Video, Completed }
 
@@ -99,17 +90,23 @@ fun HistoryScreen(
 
     val sections = remember(filtered) { groupHistoryBySection(filtered) }
 
+    val bg = MaterialTheme.colorScheme.background
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+    val onBg = MaterialTheme.colorScheme.onBackground
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+    val surfaceContainer = MaterialTheme.colorScheme.surfaceContainer
+    val primary = MaterialTheme.colorScheme.primary
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
+            .background(bg)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(BackgroundDark, SurfaceStripe, BackgroundDark)
+                        colors = listOf(bg, surfaceVariant, bg)
                     )
                 )
         )
@@ -121,12 +118,21 @@ fun HistoryScreen(
                     .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = onBg)
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("History", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Audio & Video files", fontSize = 14.sp, color = TextSecondary)
+                    Text(
+                        "History",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = onBg
+                    )
+                    Text(
+                        "Audio & Video files",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = onSurfaceVariant
+                    )
                 }
             }
 
@@ -137,21 +143,26 @@ fun HistoryScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
                 placeholder = {
-                    Text("Search audio or video…", color = TextSecondary.copy(alpha = 0.7f))
+                    Text("Search audio or video…", color = onSurfaceVariant.copy(alpha = 0.7f))
                 },
                 leadingIcon = {
-                    Icon(Icons.Filled.Search, contentDescription = null, tint = TextSecondary)
+                    Icon(
+                        Icons.Filled.Search,
+                        contentDescription = null,
+                        tint = onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
                 },
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary,
-                    focusedBorderColor = AccentGreen.copy(alpha = 0.75f),
-                    unfocusedBorderColor = TextSecondary.copy(alpha = 0.35f),
-                    cursorColor = AccentGreen,
-                    focusedContainerColor = BackgroundCard,
-                    unfocusedContainerColor = BackgroundCard
+                    focusedTextColor = onBg,
+                    unfocusedTextColor = onBg,
+                    focusedBorderColor = primary.copy(alpha = 0.75f),
+                    unfocusedBorderColor = onSurfaceVariant.copy(alpha = 0.35f),
+                    cursorColor = primary,
+                    focusedContainerColor = surfaceContainer,
+                    unfocusedContainerColor = surfaceContainer
                 )
             )
 
@@ -183,8 +194,8 @@ fun HistoryScreen(
                     item {
                         Text(
                             text = "No files match filters.",
-                            color = TextSecondary,
-                            fontSize = 14.sp,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp)
                         )
                     }
@@ -193,9 +204,9 @@ fun HistoryScreen(
                         item {
                             Text(
                                 text = title,
-                                fontSize = 12.sp,
+                                style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = TextSecondary,
+                                color = onSurfaceVariant,
                                 letterSpacing = 1.sp,
                                 modifier = Modifier.padding(start = 24.dp, top = 16.dp, bottom = 8.dp)
                             )
@@ -241,16 +252,22 @@ fun HistoryScreen(
 
 @Composable
 private fun HistoryFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val surface = MaterialTheme.colorScheme.surfaceContainer
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+    val outline = MaterialTheme.colorScheme.outlineVariant
     Box(
         modifier = Modifier
+            .defaultMinSize(minHeight = 40.dp)
             .clip(RoundedCornerShape(22.dp))
             .then(
                 if (selected) {
-                    Modifier.background(Brush.horizontalGradient(listOf(ThemeRed, ThemeBlue)))
+                    Modifier.background(Brush.horizontalGradient(listOf(primary, secondary)))
                 } else {
                     Modifier
-                        .background(Color.White)
-                        .border(1.dp, SliderTrackStrong.copy(alpha = 0.45f), RoundedCornerShape(22.dp))
+                        .background(surface)
+                        .border(1.dp, outline.copy(alpha = 0.45f), RoundedCornerShape(22.dp))
                 }
             )
             .clickable(onClick = onClick)
@@ -259,9 +276,9 @@ private fun HistoryFilterChip(label: String, selected: Boolean, onClick: () -> U
     ) {
         Text(
             text = label,
-            fontSize = 13.sp,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            color = if (selected) Color.White else TextSecondary
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else onSurfaceVariant
         )
     }
 }
@@ -315,11 +332,21 @@ private fun HistoryMediaRow(
     val playing = currentlyPlaying == pair.cleanedFile
     val done = cleaned.exists()
 
+    val surfaceContainer = MaterialTheme.colorScheme.surfaceContainer
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val tertiary = MaterialTheme.colorScheme.tertiary
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+    val error = MaterialTheme.colorScheme.error
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 6.dp),
-        colors = CardDefaults.cardColors(containerColor = BackgroundCard),
+        colors = CardDefaults.cardColors(containerColor = surfaceContainer),
         shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -335,9 +362,9 @@ private fun HistoryMediaRow(
                     .clip(RoundedCornerShape(14.dp))
                     .background(
                         brush = if (video) {
-                            Brush.linearGradient(listOf(ThemeRed, ThemeBlue))
+                            Brush.linearGradient(listOf(primary, secondary))
                         } else {
-                            Brush.linearGradient(listOf(AccentPurple, AccentGreen))
+                            Brush.linearGradient(listOf(secondary, tertiary))
                         }
                     ),
                 contentAlignment = Alignment.Center
@@ -345,7 +372,7 @@ private fun HistoryMediaRow(
                 Icon(
                     imageVector = if (video) Icons.Filled.Star else Icons.Filled.PlayArrow,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = onPrimary,
                     modifier = Modifier.size(26.dp)
                 )
             }
@@ -356,9 +383,9 @@ private fun HistoryMediaRow(
                         text = pair.cleanedFile,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        fontSize = 15.sp,
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
+                        color = onSurface,
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -366,7 +393,7 @@ private fun HistoryMediaRow(
                         modifier = Modifier
                             .size(8.dp)
                             .clip(CircleShape)
-                            .background(if (done) AccentGreen else Color(0xFFFFCA28))
+                            .background(if (done) primary else tertiary)
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
@@ -378,8 +405,8 @@ private fun HistoryMediaRow(
                 }
                 Text(
                     text = "${formatFileSize(sizeBytes)} · $type · $dur",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -388,7 +415,7 @@ private fun HistoryMediaRow(
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = if (playing) AccentGreen.copy(alpha = 0.2f) else SurfaceStripe,
+                    color = if (playing) primary.copy(alpha = 0.2f) else surfaceVariant,
                     modifier = Modifier.clickable { onPlay() }
                 ) {
                     Row(
@@ -397,22 +424,22 @@ private fun HistoryMediaRow(
                     ) {
                         Icon(
                             Icons.Filled.PlayArrow,
-                            contentDescription = "Play",
-                            tint = if (playing) AccentGreen else TextPrimary,
+                            contentDescription = if (playing) "Stop" else "Play",
+                            tint = if (playing) primary else onSurface,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = if (playing) "Stop" else "Play",
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
-                            color = if (playing) AccentGreen else TextPrimary
+                            color = if (playing) primary else onSurface
                         )
                     }
                 }
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = BackgroundCard,
+                    color = surfaceContainer,
                     modifier = Modifier.clickable { onSave() }
                 ) {
                     Row(
@@ -422,11 +449,15 @@ private fun HistoryMediaRow(
                         Icon(
                             Icons.Filled.CheckCircle,
                             contentDescription = "Save",
-                            tint = AccentCyan,
+                            tint = tertiary,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Save", fontSize = 12.sp, color = TextPrimary)
+                        Text(
+                            "Save",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = onSurface
+                        )
                     }
                 }
             }
@@ -440,18 +471,18 @@ private fun HistoryMediaRow(
         ) {
             Text(
                 text = pair.time,
-                fontSize = 11.sp,
-                color = TextSecondary.copy(alpha = 0.8f),
+                style = MaterialTheme.typography.labelSmall,
+                color = onSurfaceVariant.copy(alpha = 0.8f),
                 modifier = Modifier.weight(1f)
             )
-            IconButton(onClick = onShare, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Share", tint = TextSecondary)
+            IconButton(onClick = onShare, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Share", tint = onSurfaceVariant)
             }
-            IconButton(onClick = onFeedback, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Filled.Info, contentDescription = "Feedback", tint = TextSecondary)
+            IconButton(onClick = onFeedback, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Filled.Info, contentDescription = "Feedback", tint = onSurfaceVariant)
             }
-            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Filled.Close, contentDescription = "Delete", tint = Color(0xFFEF5350))
+            IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Filled.Close, contentDescription = "Delete", tint = error)
             }
         }
     }

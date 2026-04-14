@@ -19,3 +19,6 @@ tmp_audio/
 
 # OS
 .DS_Store
+
+# Claude Code session state (per-machine)
+.claude/

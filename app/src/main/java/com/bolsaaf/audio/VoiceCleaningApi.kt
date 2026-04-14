@@ -226,7 +226,8 @@ class VoiceCleaningApi(
                 Log.w(TAG, "Invalid status JSON: $text")
                 return@repeat
             }
-            when (j.optString("status")) {
+            val jobState = j.optString("status").ifEmpty { j.optString("state") }
+            when (jobState) {
                 "completed" -> {
                     val url = j.optString("cleaned_url").trim()
                     Log.d(TAG, "poll status=completed job_id=$jobId urlPresent=${url.isNotEmpty()}")
