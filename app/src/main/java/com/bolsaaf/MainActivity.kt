@@ -149,8 +149,8 @@ class MainActivity : ComponentActivity() {
 
     private fun openUploadPicker() {
         when (processingFlow) {
-            ProcessingFlow.VIDEO_PROCESS -> pickVideoLauncher.launch("video/*|audio/*")
-            else -> pickAudioLauncher.launch("audio/*|video/*")
+            ProcessingFlow.VIDEO_PROCESS -> pickVideoLauncher.launch("video/*")
+            else -> pickAudioLauncher.launch("audio/*")
         }
     }
 
@@ -502,18 +502,25 @@ class MainActivity : ComponentActivity() {
         val outputDir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "BolSaaf")
         if (!outputDir.exists()) outputDir.mkdirs()
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val requestedVideo = fastLibInputIsVideo && uriIsLikelyVideoMedia(uri)
         val inputFile = File(outputDir, "fastlib_input_$timestamp${guessExtensionForUri(uri)}")
-        val outFile = if (fastLibInputIsVideo) {
-            File(outputDir, "fastlib_cleaned_$timestamp.mp4")
-        } else {
-            File(outputDir, "fastlib_cleaned_$timestamp.wav")
-        }
 
         Thread {
             try {
                 saveOriginalFromUri(uri, inputFile)
-                runOnUiThread { fastLibIsCleaning = true }
-                if (fastLibInputIsVideo) {
+                val treatAsVideo = requestedVideo && fileHasVideoTrack(inputFile)
+                val outFile = if (treatAsVideo) {
+                    File(outputDir, "fastlib_cleaned_$timestamp.mp4")
+                } else {
+                    File(outputDir, "fastlib_cleaned_$timestamp.wav")
+                }
+                runOnUiThread {
+                    fastLibIsCleaning = true
+                    if (fastLibInputIsVideo && !treatAsVideo) {
+                        Toast.makeText(this, "No video track detected. Running audio clean.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                if (treatAsVideo) {
                     val accepted = voiceApiPhase2.fastLibVideoProcess(inputFile)
                     var status = voiceApiPhase2.getStatus(accepted.jobId)
                     var attempts = 0
@@ -560,6 +567,50 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }.start()
+    }
+
+    private fun uriHasVideoTrack(uri: Uri): Boolean {
+        val mmr = MediaMetadataRetriever()
+        return try {
+            mmr.setDataSource(this, uri)
+            mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) == "yes"
+        } catch (_: Exception) {
+            false
+        } finally {
+            try {
+                mmr.release()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private fun uriIsLikelyVideoMedia(uri: Uri): Boolean {
+        val mime = contentResolver.getType(uri)?.lowercase(Locale.US).orEmpty()
+        if (mime.startsWith("video/")) return true
+        if (mime.startsWith("audio/")) return false
+
+        val name = getFileName(uri).lowercase(Locale.US)
+        val videoExt = listOf(".mp4", ".mov", ".mkv", ".webm", ".avi", ".3gp", ".m4v")
+        val audioExt = listOf(".m4a", ".mp3", ".wav", ".aac", ".ogg", ".flac", ".opus")
+        if (audioExt.any { name.endsWith(it) }) return false
+        if (videoExt.any { name.endsWith(it) }) return true
+
+        return uriHasVideoTrack(uri)
+    }
+
+    private fun fileHasVideoTrack(file: File): Boolean {
+        val mmr = MediaMetadataRetriever()
+        return try {
+            mmr.setDataSource(file.absolutePath)
+            mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) == "yes"
+        } catch (_: Exception) {
+            false
+        } finally {
+            try {
+                mmr.release()
+            } catch (_: Exception) {
+            }
+        }
     }
 
     private fun startRecording() {

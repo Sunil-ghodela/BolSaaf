@@ -3,7 +3,6 @@ package com.bolsaaf.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -26,10 +24,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,48 +59,53 @@ fun BottomNavBar(
     Surface(
         modifier = modifier
             .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 10.dp)
             .border(
                 1.dp,
-                SliderTrackStrong.copy(alpha = 0.35f),
-                RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                SliderTrackStrong.copy(alpha = 0.28f),
+                RoundedCornerShape(28.dp)
             ),
         color = BackgroundCard,
-        shadowElevation = 12.dp,
+        shadowElevation = 16.dp,
         tonalElevation = 2.dp,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        shape = RoundedCornerShape(28.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 14.dp, horizontal = 16.dp)
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.SpaceEvenly
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             NavItem(
+                modifier = Modifier.weight(1f),
                 icon = Icons.Filled.Home,
                 label = "Home",
                 isSelected = selectedTab == 0,
                 onClick = { onTabSelected(0) }
             )
             NavItem(
+                modifier = Modifier.weight(1f),
                 icon = Icons.Default.PlayArrow,
                 label = "Live",
                 isSelected = selectedTab == 1,
                 onClick = { onTabSelected(1) }
             )
             NavItem(
+                modifier = Modifier.weight(1f),
                 icon = Icons.Filled.Menu,
                 label = "History",
                 isSelected = selectedTab == 2,
                 onClick = { onTabSelected(2) }
             )
             NavItem(
+                modifier = Modifier.weight(1f),
                 icon = Icons.Default.Person,
                 label = "Profile",
                 isSelected = selectedTab == 3,
                 onClick = { onTabSelected(3) }
             )
             NavItem(
+                modifier = Modifier.weight(1f),
                 icon = Icons.Default.Build,
                 label = "Lab",
                 isSelected = selectedTab == 4,
@@ -108,36 +117,67 @@ fun BottomNavBar(
 
 @Composable
 private fun NavItem(
+    modifier: Modifier = Modifier,
     icon: ImageVector,
     label: String,
     isSelected: Boolean = false,
     onClick: () -> Unit = {}
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick)
+    val activeColor by animateColorAsState(
+        targetValue = if (isSelected) ThemeRed else NavUnselected,
+        animationSpec = spring(stiffness = 700f),
+        label = "navColor"
+    )
+    val containerColor by animateColorAsState(
+        targetValue = if (isSelected) ThemeRed.copy(alpha = 0.14f) else Color.Transparent,
+        animationSpec = spring(stiffness = 700f),
+        label = "navContainer"
+    )
+    val iconSize by animateDpAsState(
+        targetValue = if (isSelected) 22.dp else 20.dp,
+        animationSpec = spring(stiffness = 700f),
+        label = "navIconSize"
+    )
+    val textAlpha by animateFloatAsState(
+        targetValue = if (isSelected) 1f else 0.88f,
+        animationSpec = spring(stiffness = 700f),
+        label = "navTextAlpha"
+    )
+
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        color = containerColor,
+        contentColor = activeColor
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = if (isSelected) ThemeRed else NavUnselected,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (isSelected) ThemeRed else NavUnselected,
-            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
-        )
-        if (isSelected) {
-            Spacer(modifier = Modifier.height(2.dp))
-            Box(
-                modifier = Modifier
-                    .size(4.dp)
-                    .clip(CircleShape)
-                    .background(ThemeRed)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(vertical = 8.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = activeColor,
+                modifier = Modifier.size(iconSize)
             )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = activeColor.copy(alpha = textAlpha),
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+            )
+            if (isSelected) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier
+                        .size(3.dp)
+                        .clip(CircleShape)
+                        .background(activeColor)
+                )
+            }
         }
     }
 }
