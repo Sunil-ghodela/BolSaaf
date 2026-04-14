@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
@@ -38,10 +39,10 @@ import com.bolsaaf.ui.theme.SliderTrackStrong
 import com.bolsaaf.ui.theme.ThemeRed
 
 /**
- * 4-tab bottom navigation shared by HomeScreen, LiveScreen, HistoryScreen, ProfileScreen.
+ * 5-tab bottom navigation shared by app screens.
  *
  * Tab indices:
- *   0 Home, 1 Live, 2 History, 3 Profile.
+ *   0 Home, 1 Live, 2 History, 3 Profile, 4 Lab.
  *
  * Kept in ui.components so each screen imports a single source of truth.
  */
@@ -94,6 +95,12 @@ fun BottomNavBar(
                 label = "Profile",
                 isSelected = selectedTab == 3,
                 onClick = { onTabSelected(3) }
+            )
+            NavItem(
+                icon = Icons.Default.Build,
+                label = "Lab",
+                isSelected = selectedTab == 4,
+                onClick = { onTabSelected(4) }
             )
         }
     }
