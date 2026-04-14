@@ -274,6 +274,19 @@ Because `CELERY_TASK_ACKS_LATE=True`, a worker crash during execution re-queues 
 
 ---
 
+## 10b. Live patches applied 2026-04-14 (later session)
+
+Three more server-side fixes after the gunicorn/Celery rollout:
+
+1. **Video pipeline double-free** (`services/video_process.py`).
+   The old code created a `tmp_job = AudioFile.objects.create(original_file=job.original_file, …)` and on `tmp_job.delete()` the model's overridden `AudioFile.delete()` removed the **shared** `original_file` from disk. The next ffmpeg remux then failed with `No such file or directory` on its input video — the failure was hidden because `subprocess.run(check=True, capture_output=True)` raises `CalledProcessError` whose `__str__` shows the command but not the stderr. `tmp_job` was unused dead code (loudnorm operates on the wav path directly), so the create/delete dance was deleted entirely.
+2. **Error wrapping** in `views.py` / `services/video_process.py` now appends `--stderr--\n<last 1500 chars>` from `CalledProcessError.stderr` when failing, so future ffmpeg blowups land readable in `error_message` instead of a bare exit-status line.
+3. **Download MIME** in `CleanedFileDownloadView` was hardcoded `audio/wav` — even for `.mp4` outputs. Replaced with `mimetypes.guess_type(name)` so video downloads return `Content-Type: video/mp4`. The Android client previously cared only about extension when saving but external clients (browsers, sharing targets) need the right MIME.
+
+End-to-end re-verification (all green): `/voice/clean/`, `/voice/extract_voice/`, `/voice/reel/`, `/voice/add_background/`, `/voice/video/process/`. Backups at `/root/voice_backups_20260414/{video_process.py.pre_tmpjob_fix,views.py.pre_content_type_fix}`.
+
+Latent risk worth noting: `services/reel_v2.py:_create_child_from_source` also creates `AudioFile` rows that share `original_file.name` with the source. If any future code calls `.delete()` on those children, the same shared-file deletion will recur. Today's flow doesn't trigger it, but the model's overridden `delete()` should probably check for shared file refs before unlinking — tracked separately if it bites.
+
 ## 11. Known debt
 
 | Area | Item | Status |
