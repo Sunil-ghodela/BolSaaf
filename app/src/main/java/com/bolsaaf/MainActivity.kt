@@ -514,11 +514,7 @@ class MainActivity : ComponentActivity() {
                 saveOriginalFromUri(uri, inputFile)
                 runOnUiThread { fastLibIsCleaning = true }
                 if (fastLibInputIsVideo) {
-                    val accepted = voiceApiPhase2.processVideo(
-                        file = inputFile,
-                        jobType = "video_reel",
-                        mode = "studio"
-                    )
+                    val accepted = voiceApiPhase2.fastLibVideoProcess(inputFile)
                     var status = voiceApiPhase2.getStatus(accepted.jobId)
                     var attempts = 0
                     while (status.status !in setOf("completed", "failed") && attempts < 120) {
@@ -533,11 +529,20 @@ class MainActivity : ComponentActivity() {
                         ?: throw IllegalStateException("No output url for video cleaning")
                     downloadFromUrl(outputUrl, outFile)
                 } else {
-                    voiceApi.cleanAudio(
-                        audioFile = inputFile,
-                        outputFile = outFile,
-                        mode = "studio"
-                    )
+                    val accepted = voiceApiPhase2.fastLibClean(inputFile)
+                    var status = voiceApiPhase2.getStatus(accepted.jobId)
+                    var attempts = 0
+                    while (status.status !in setOf("completed", "failed") && attempts < 120) {
+                        Thread.sleep(1500)
+                        status = voiceApiPhase2.getStatus(accepted.jobId)
+                        attempts++
+                    }
+                    if (status.status != "completed") {
+                        throw IllegalStateException(status.errorMessage ?: "Audio cleaning failed")
+                    }
+                    val outputUrl = status.outputAudioUrl ?: status.cleanedUrl
+                        ?: throw IllegalStateException("No output url for audio cleaning")
+                    downloadFromUrl(outputUrl, outFile)
                 }
 
                 val duration = mediaDurationSec(outFile)

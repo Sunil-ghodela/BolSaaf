@@ -247,6 +247,22 @@ class VoiceApiPhase2Client(
         )
     }
 
+    fun fastLibClean(file: File): VoiceJobAccepted {
+        return submitJob(
+            endpoint = "lab/clean/",
+            file = file,
+            fields = emptyMap()
+        )
+    }
+
+    fun fastLibVideoProcess(file: File): VoiceJobAccepted {
+        return submitJob(
+            endpoint = "lab/video/process/",
+            file = file,
+            fields = emptyMap()
+        )
+    }
+
     fun getBackgrounds(): List<VoiceBackground> {
         val endpoint = baseUrl.trimEnd('/') + "/backgrounds/"
         val conn = URL(endpoint).openConnection() as HttpURLConnection
