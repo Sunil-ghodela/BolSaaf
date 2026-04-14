@@ -139,6 +139,7 @@ fun HomeScreen(
     onStartRecording: () -> Unit = {},
     onStopRecording: () -> Unit = {},
     onUploadFile: () -> Unit = {},
+    onVideoUpload: () -> Unit = {},
     onCleanFile: () -> Unit = {},
     onCancelUpload: () -> Unit = {},
     onGoToHistory: () -> Unit = {},
@@ -258,8 +259,11 @@ fun HomeScreen(
                         onUploadFile()
                     },
                     onVideoClean = {
-                        onProcessingModeChange(3)
-                        onUploadFile()
+                        // Single atomic callback: MainActivity sets
+                        // processingFlow=VIDEO_PROCESS and launches the video
+                        // picker in one method. Avoids the timing bug where
+                        // onUploadFile() read a stale processingFlow.
+                        onVideoUpload()
                     }
                 )
 

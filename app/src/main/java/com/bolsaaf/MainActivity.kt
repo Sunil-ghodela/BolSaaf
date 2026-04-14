@@ -154,6 +154,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Atomically switch to VIDEO_PROCESS and open the video picker.
+     * Avoids any read-after-write timing ambiguity when callers sequentially
+     * change mode then open the picker on the next line — the previous
+     * "Video Clean" tap sometimes opened the audio picker because
+     * openUploadPicker() reads processingFlow and the mutation hadn't
+     * propagated yet. This is the safe single-call path.
+     */
+    private fun openVideoPickerDirect() {
+        processingFlow = ProcessingFlow.VIDEO_PROCESS
+        pickVideoLauncher.launch("video/*")
+    }
+
     private fun openFastAudioPicker() {
         pickFastAudioLauncher.launch("audio/*")
     }
@@ -218,6 +231,7 @@ class MainActivity : ComponentActivity() {
                         onStartRecording = { startRecording() },
                         onStopRecording = { stopRecording() },
                         onUploadFile = { openUploadPicker() },
+                        onVideoUpload = { openVideoPickerDirect() },
                         onCleanFile = { startCleaningProcess() },
                         onCancelUpload = { cancelUpload() },
                         onGoToHistory = { selectedTab = 2 },
@@ -360,6 +374,7 @@ class MainActivity : ComponentActivity() {
                         onStartRecording = { startRecording() },
                         onStopRecording = { stopRecording() },
                         onUploadFile = { openUploadPicker() },
+                        onVideoUpload = { openVideoPickerDirect() },
                         onCleanFile = { startCleaningProcess() },
                         onCancelUpload = { cancelUpload() },
                         onGoToHistory = { selectedTab = 2 },

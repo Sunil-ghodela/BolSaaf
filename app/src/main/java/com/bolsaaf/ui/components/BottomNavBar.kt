@@ -16,10 +16,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -85,14 +85,14 @@ fun BottomNavBar(
             )
             NavItem(
                 modifier = Modifier.weight(1f),
-                icon = Icons.Default.PlayArrow,
+                icon = Icons.Filled.Mic,
                 label = "Live",
                 isSelected = selectedTab == 1,
                 onClick = { onTabSelected(1) }
             )
             NavItem(
                 modifier = Modifier.weight(1f),
-                icon = Icons.Filled.Menu,
+                icon = Icons.Filled.History,
                 label = "History",
                 isSelected = selectedTab == 2,
                 onClick = { onTabSelected(2) }
@@ -108,6 +108,7 @@ fun BottomNavBar(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.Build,
                 label = "Lab",
+                badge = "DEV",
                 isSelected = selectedTab == 4,
                 onClick = { onTabSelected(4) }
             )
@@ -121,6 +122,7 @@ private fun NavItem(
     icon: ImageVector,
     label: String,
     isSelected: Boolean = false,
+    badge: String? = null,
     onClick: () -> Unit = {}
 ) {
     val activeColor by animateColorAsState(
@@ -154,14 +156,28 @@ private fun NavItem(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(vertical = 8.dp)
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = activeColor,
-                modifier = Modifier.size(iconSize)
-            )
+            Box(contentAlignment = Alignment.TopEnd) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = activeColor,
+                    modifier = Modifier.size(iconSize)
+                )
+                if (badge != null) {
+                    // Small dot in top-right corner of the icon, signalling
+                    // a non-primary tab (e.g. internal/dev). Visual cue + the
+                    // badge text below carries the meaning for screen readers.
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 1.dp, end = 0.dp)
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(ThemeRed)
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = label,
@@ -169,13 +185,12 @@ private fun NavItem(
                 color = activeColor.copy(alpha = textAlpha),
                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
             )
-            if (isSelected) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Box(
-                    modifier = Modifier
-                        .size(3.dp)
-                        .clip(CircleShape)
-                        .background(activeColor)
+            if (badge != null) {
+                Text(
+                    text = badge,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ThemeRed,
+                    fontWeight = FontWeight.Bold,
                 )
             }
         }
