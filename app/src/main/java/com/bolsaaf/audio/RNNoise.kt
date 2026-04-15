@@ -7,10 +7,28 @@ class RNNoise {
     companion object {
         const val FRAME_SIZE = 480  // RNNoise works with 480 samples per frame
 
+        @Volatile
+        private var loadError: Throwable? = null
+
+        @Volatile
+        private var libraryLoaded: Boolean = false
+
         init {
-            System.loadLibrary("rnnoise-lib")
-            Log.i("RNNoise", "Native library loaded")
+            try {
+                System.loadLibrary("rnnoise-lib")
+                libraryLoaded = true
+                Log.i("RNNoise", "Native library loaded")
+            } catch (t: Throwable) {
+                loadError = t
+                Log.e("RNNoise", "Failed to load native library — cloud fallback required", t)
+            }
         }
+
+        /** True when librnnoise-lib.so loaded successfully. Callers should fall back to cloud clean when false. */
+        fun isLibraryLoaded(): Boolean = libraryLoaded
+
+        /** The underlying load error if [isLibraryLoaded] is false, for diagnostic surfacing. */
+        fun loadError(): Throwable? = loadError
     }
 
     external fun create(): Long
