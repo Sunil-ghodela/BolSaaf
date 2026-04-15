@@ -350,8 +350,8 @@ fun ComparisonPlayerScreen(
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Filled.Close else Icons.Filled.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.Black,
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(28.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -359,7 +359,7 @@ fun ComparisonPlayerScreen(
                     if (isPlaying) "Pause" else "Play",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.Black
+                    color = MaterialTheme.colorScheme.onPrimary
                 )
             }
 
