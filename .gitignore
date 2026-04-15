@@ -12,6 +12,7 @@ local.properties
 keystore/
 *.jks
 *.keystore
+BOLSAAF_PROJECT_INFO.md
 
 # Large / generated / local test data
 tmp_audio/
