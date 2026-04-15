@@ -12,7 +12,7 @@ val BackgroundCard = Color(0xFFFFFFFF)
 
 val SurfaceStripe = Color(0xFFF4F5F7)
 
-// Brand stops — red → purple → blue (the "Ghar baithe banao" gradient).
+// Brand stops — red → purple → blue (the display-headline gradient).
 val BrandRed = Color(0xFFE94E5B)
 val BrandPurple = Color(0xFFA24CB7)
 val BrandBlue = Color(0xFF3D7DDB)

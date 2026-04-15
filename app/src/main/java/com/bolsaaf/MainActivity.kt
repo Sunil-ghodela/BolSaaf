@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "MainActivity"
         const val FREE_QUOTA_MINUTES = 20
         const val QUOTA_WARN_THRESHOLD = 3
+        const val SUPPORT_EMAIL = "ss.sunil9255@gmail.com"
         // FastLib caps (must stay ≤ server nginx `voice_upload` client_max_body_size = 50M).
         const val FASTLIB_MAX_VIDEO_BYTES: Long = 50L * 1024 * 1024  // 50 MB
         const val FASTLIB_MAX_AUDIO_BYTES: Long = 25L * 1024 * 1024  // 25 MB soft cap for audio
@@ -532,7 +533,7 @@ class MainActivity : ComponentActivity() {
                         onDismiss = { showSettingsDialog = false },
                         onClearCache = { clearCache() },
                         onAbout = {
-                            Toast.makeText(this@MainActivity, "BolSaaf v1.0.0\nAudio & Video Studio", Toast.LENGTH_LONG).show()
+                            Toast.makeText(this@MainActivity, "BolSaaf v1.0.1\nAudio & Video Studio", Toast.LENGTH_LONG).show()
                             showSettingsDialog = false
                         },
                         onPrivacyPolicy = {
@@ -541,6 +542,10 @@ class MainActivity : ComponentActivity() {
                         },
                         onTermsOfService = {
                             openExternalUrl("https://shadowselfwork.com/voice/terms")
+                            showSettingsDialog = false
+                        },
+                        onContactSupport = {
+                            openSupportEmail()
                             showSettingsDialog = false
                         }
                     )
@@ -2165,6 +2170,27 @@ class MainActivity : ComponentActivity() {
             startActivity(intent)
         } catch (_: Exception) {
             Toast.makeText(this, "No browser available", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun openSupportEmail() {
+        val subject = "BolSaaf support — v" + try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.1"
+        } catch (_: Exception) { "1.0.1" }
+        val uri = android.net.Uri.parse(
+            "mailto:${SUPPORT_EMAIL}?subject=${android.net.Uri.encode(subject)}"
+        )
+        val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO, uri).apply {
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            startActivity(android.content.Intent.createChooser(intent, "Contact BolSaaf support"))
+        } catch (_: android.content.ActivityNotFoundException) {
+            Toast.makeText(
+                this,
+                "No email app found. Reach us at $SUPPORT_EMAIL",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 

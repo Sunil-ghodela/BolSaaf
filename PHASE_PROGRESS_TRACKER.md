@@ -10,7 +10,7 @@
 - Play Store listing fields locked:
   - Privacy Policy URL → `https://shadowselfwork.com/voice/privacy`
   - Terms of Service URL → `https://shadowselfwork.com/voice/terms`
-  - Support email → `support@shadowselfwork.com` (stub in the policies)
+  - Support email → `ss.sunil9255@gmail.com` (also surfaced as "Contact Support" in Settings dialog)
   - Category → Music & Audio (alt: Video Players & Editors); Content rating → Everyone.
 
 ### Legal pages moved under `/voice/`

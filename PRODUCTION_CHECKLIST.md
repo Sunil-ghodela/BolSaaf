@@ -94,7 +94,7 @@ Run all of these on the connected device (`./gradlew :app:installDebug` first if
 | ☐ | Content rating | Everyone |
 | ☐ | Privacy Policy URL | `https://shadowselfwork.com/voice/privacy` |
 | ☐ | Terms of Service URL | `https://shadowselfwork.com/voice/terms` |
-| ☐ | Support email | `support@shadowselfwork.com` |
+| ☐ | Support email | `ss.sunil9255@gmail.com` |
 | ☐ | App icon (512×512 PNG) | brand red→purple→blue gradient mark |
 | ☐ | Feature graphic (1024×500) | hero with brand gradient + "Studio jaisi awaaz" |
 | ☐ | Phone screenshots × 4–8 | Home, Make Reel, Live, Plan modal, FastLib |
@@ -130,7 +130,7 @@ Run all of these on the connected device (`./gradlew :app:installDebug` first if
 | ☐ | `429`s spiking? | DRF / nginx logs | tune throttle limits if legitimate |
 | ☐ | Disk pressure on `/var/www/simplelms/backend/media/cleaned/` | `df -h` + cron cleanup | add purge job if needed |
 | ☐ | User reviews / ratings | Play Console | reply within 24 h |
-| ☐ | Support email | `support@shadowselfwork.com` | triage daily |
+| ☐ | Support email | `ss.sunil9255@gmail.com` | triage daily |
 
 ## 9. Known gaps to close before next release
 

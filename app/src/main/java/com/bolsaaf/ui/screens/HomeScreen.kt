@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
@@ -839,7 +840,7 @@ fun AnimatedTitle() {
             exit = slideOutToBottom() + fadeOut()
         ) {
             Text(
-                "Studio jaisi awaaz",
+                "Studio-grade voice",
                 style = MaterialTheme.typography.displaySmall,
                 color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.Bold,
@@ -871,7 +872,7 @@ fun AnimatedTitle() {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "Audio dono",
+                    text = "Audio",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.secondary
@@ -2532,7 +2533,7 @@ fun MakeReelBanner(
                         color = Color.White
                     )
                     Text(
-                        text = "1 tap mein reel ready",
+                        text = "Reel ready in 1 tap",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.85f)
                     )
@@ -2563,7 +2564,8 @@ fun SettingsDialog(
     onClearCache: () -> Unit = {},
     onAbout: () -> Unit = {},
     onPrivacyPolicy: () -> Unit = {},
-    onTermsOfService: () -> Unit = {}
+    onTermsOfService: () -> Unit = {},
+    onContactSupport: () -> Unit = {}
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -2592,7 +2594,7 @@ fun SettingsDialog(
                 SettingsOption(
                     icon = Icons.Filled.Info,
                     title = "About BolSaaf",
-                    subtitle = "Version 1.0.0",
+                    subtitle = "Version 1.0.1",
                     onClick = onAbout
                 )
 
@@ -2621,6 +2623,15 @@ fun SettingsDialog(
                     title = "Terms of Service",
                     subtitle = "App usage terms",
                     onClick = onTermsOfService
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                SettingsOption(
+                    icon = Icons.Filled.Email,
+                    title = "Contact Support",
+                    subtitle = "ss.sunil9255@gmail.com",
+                    onClick = onContactSupport
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
