@@ -2,7 +2,20 @@
 
 **Last Updated**: 2026-04-15 (evening — real auth backend + /voice/admin/ ops dashboard live)
 
-## ✅ COMPLETED (April 15 — evening: AdMob wired + real auth + admin dashboard)
+## ✅ COMPLETED (April 15 — evening: AdMob wired + real auth + admin dashboard + account deletion)
+
+### Self-serve account deletion (Play Console requirement)
+- New `VoiceUser` fields `delete_request_token` + `delete_request_expires` (migration `0008`).
+- New endpoints:
+  - `GET  /voice/account-deletion/` — brand-styled request form with brand gradient button, lists exactly what gets deleted.
+  - `POST /voice/account-deletion/` — sends 48-hour confirmation email via SendGrid, responds 200 regardless (no account enumeration).
+  - `GET  /voice/account-deletion/confirm/?token=…` — confirm page with red primary button + Cancel.
+  - `POST /voice/account-deletion/confirm/` — validates token + expiry, deletes `VoiceUser` row.
+- End-to-end smoke: register → request → email → confirm → `VoiceUser.objects.count() = 0`.
+- Privacy policy at `/voice/privacy` updated to link the deletion URL in a new "Account deletion" section.
+- **Play Console uses**: paste `https://shadowselfwork.com/voice/account-deletion/` into Data Safety → "Account deletion" field.
+
+
 
 ### AdMob (Google Mobile Ads) — app registration only (no ad units placed yet)
 - **App ID** `ca-app-pub-9194903827759003~6689280046` added to `AndroidManifest.xml` as `com.google.android.gms.ads.APPLICATION_ID` (required by the SDK even before any ad unit runs).

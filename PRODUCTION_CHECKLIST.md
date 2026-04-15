@@ -96,6 +96,7 @@ Run all of these on the connected device (`./gradlew :app:installDebug` first if
 | ☐ | Content rating | Everyone |
 | ☐ | Privacy Policy URL | `https://shadowselfwork.com/voice/privacy` |
 | ☐ | Terms of Service URL | `https://shadowselfwork.com/voice/terms` |
+| ☐ | Account deletion URL | `https://shadowselfwork.com/voice/account-deletion/` |
 | ☐ | Support email | `ss.sunil9255@gmail.com` |
 | ☐ | App icon (512×512 PNG) | brand red→purple→blue gradient mark |
 | ☐ | Feature graphic (1024×500) | hero with brand gradient + "Studio jaisi awaaz" |
