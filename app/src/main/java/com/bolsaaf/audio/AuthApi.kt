@@ -6,7 +6,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * BolSaaf voice-auth client (server: /voice/auth/*).
+ * BolSaaf voice-auth client. Talks to the `/voice/auth/` endpoint family.
  *
  * One opaque Bearer token per session (rotated on each login / cleared on logout).
  * Tokens + hydrated user profile are stored by the caller (MainActivity) in
