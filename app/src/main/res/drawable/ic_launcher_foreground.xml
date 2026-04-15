@@ -1,41 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    
-    <!-- Background orange circle -->
+
     <path
-        android:fillColor="#FF6B35"
-        android:pathData="M54,6C28.55,6 8,26.55 8,52s20.55,46 46,46 46,-20.55 46,-46 -20.55,-46 -46,-46z" />
-    
-    <!-- Blue accent circle -->
+        android:pathData="M 54,24 A 30,30 0 1 0 54,84"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.85"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+
     <path
-        android:fillColor="#004E89"
-        android:pathData="M54,14C31.91,14 14,31.91 14,54s17.91,40 40,40 40,-17.91 40,-40 -17.91,-40 -40,-40z" />
-    
-    <!-- Sound wave 1 - left -->
+        android:pathData="M 54,35 A 19,19 0 1 0 54,73"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.95"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+
     <path
-        android:fillColor="#00D4FF"
-        android:pathData="M30,54 Q30,40 42,40 L42,68 Q30,68 30,54 Z" />
-    
-    <!-- Sound wave 2 - center -->
+        android:pathData="M 44,54 m -9,0 a 9,9 0 1,0 18,0 a 9,9 0 1,0 -18,0"
+        android:fillColor="#FFFFFF" />
+
     <path
-        android:fillColor="#00F7FF"
-        android:pathData="M48,35 Q48,20 54,18 L54,90 Q48,88 48,73 Z" />
-    
-    <!-- Sound wave 3 - right -->
-    <path
-        android:fillColor="#00D4FF"
-        android:pathData="M60,40 Q72,40 72,54 L72,54 Q72,68 60,68 Z" />
-    
-    <!-- Center microphone icon -->
-    <path
+        android:pathData="M 53,50 L 74,50 A 4,4 0 0,1 74,58 L 53,58 Z"
         android:fillColor="#FFFFFF"
-        android:pathData="M46,46 L62,46 L62,62 L46,62 Z" />
-    
-    <!-- Mic inner symbol -->
-    <path
-        android:fillColor="#FF6B35"
-        android:pathData="M50,50 L58,50 L58,58 L50,58 Z" />
+        android:fillAlpha="0.95" />
 </vector>

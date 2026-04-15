@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Launcher icon variant: voice mark only, no wordmark. Used for mipmap-*dpi PNG fallbacks on API 24-25 (API 26+ uses the adaptive drawable pair). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0"   stop-color="#E94E5B"/>
+      <stop offset="0.5" stop-color="#A24CB7"/>
+      <stop offset="1"   stop-color="#3D7DDB"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="30%" cy="25%" r="70%">
+      <stop offset="0"   stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="0.7" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vignette" cx="50%" cy="55%" r="75%">
+      <stop offset="0.55" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1"    stop-color="#000000" stop-opacity="0.18"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#brand)"/>
+  <rect width="512" height="512" fill="url(#glow)"/>
+  <rect width="512" height="512" fill="url(#vignette)"/>
+
+  <g transform="translate(256 256)" fill="none" stroke="#FFFFFF" stroke-linecap="round">
+    <path d="M -120 -64 A 136 136 0 1 1 -120 64" stroke-width="26" stroke-opacity="0.85"/>
+    <path d="M -72 -40 A 80 80 0 1 1 -72 40" stroke-width="24" stroke-opacity="0.95"/>
+    <g fill="#FFFFFF" stroke="none">
+      <circle cx="-14" cy="0" r="32"/>
+      <path d="M 14 -10 L 78 -10 A 10 10 0 0 1 78 10 L 14 10 Z" fill-opacity="0.95"/>
+    </g>
+  </g>
+</svg>
