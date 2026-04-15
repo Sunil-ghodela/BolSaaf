@@ -2,7 +2,16 @@
 
 **Last Updated**: 2026-04-15 (evening — real auth backend + /voice/admin/ ops dashboard live)
 
-## ✅ COMPLETED (April 15 — evening: real auth + admin dashboard)
+## ✅ COMPLETED (April 15 — evening: AdMob wired + real auth + admin dashboard)
+
+### AdMob (Google Mobile Ads) — app registration only (no ad units placed yet)
+- **App ID** `ca-app-pub-9194903827759003~6689280046` added to `AndroidManifest.xml` as `com.google.android.gms.ads.APPLICATION_ID` (required by the SDK even before any ad unit runs).
+- Dependency: `com.google.android.gms:play-services-ads:23.0.0` in `app/build.gradle.kts`.
+- SDK initialised off the main thread in `MainActivity.onCreate` via `MobileAds.initialize(this) {}` (AdMob's recommended pattern to avoid blocking cold start).
+- **Play Console impact**: flip "Ads declaration" from **No** to **Yes — uses third-party ads SDK (AdMob)**. Data-safety form must now declare Advertising ID reads. Content rating can stay Everyone since no ad units are placed — revisit when the first banner/interstitial lands.
+- **Signing backup metadata** (`~/bolsaaf-signing-backup-20260415.txt`) updated to include the AdMob App ID so it travels with the keystore + .env.
+
+
 
 ### Backend — `/voice/auth/*` + `/voice/admin/`
 - `VoiceUser` model extended: `free_quota_minutes`, `free_period_yyyymm` (month-rollover), `pro_expires_at`, `password_reset_token` + `password_reset_expires`. Password hashing switched from raw SHA-256 to Django's PBKDF2 (`make_password`/`check_password`) — zero user migration needed (clean table).

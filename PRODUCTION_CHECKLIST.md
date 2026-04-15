@@ -101,8 +101,8 @@ Run all of these on the connected device (`./gradlew :app:installDebug` first if
 | ☐ | Feature graphic (1024×500) | hero with brand gradient + "Studio jaisi awaaz" |
 | ☐ | Phone screenshots × 4–8 | Home, Make Reel, Live, Plan modal, FastLib |
 | ☐ | Promo video (optional) | 30 s YouTube link |
-| ☐ | Data safety form filled | mic / camera / network / no third-party data sharing |
-| ☐ | Ads declaration | **No** ads |
+| ☐ | Data safety form filled | mic / camera / network + declare Google Mobile Ads SDK (reads advertising ID on Android 13-) |
+| ☐ | Ads declaration | **Yes — AdMob** (`ca-app-pub-9194903827759003~6689280046`). SDK wired, no ad units placed yet. |
 | ☐ | Target audience | 13+ |
 | ☐ | Content guidelines self-cert | done |
 | ☐ | Countries / regions | Worldwide (or staged rollout) |

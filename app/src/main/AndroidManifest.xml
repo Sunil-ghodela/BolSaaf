@@ -44,6 +44,11 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Google Mobile Ads (AdMob) app ID. Required meta-data even before any ad unit is placed. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-9194903827759003~6689280046" />
     </application>
 
 </manifest>

@@ -102,6 +102,9 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.4")
     implementation("androidx.camera:camera-video:1.3.4")
     implementation("androidx.camera:camera-view:1.3.4")
+
+    // Google Mobile Ads (AdMob) — app registration only for now; no ad units placed yet.
+    implementation("com.google.android.gms:play-services-ads:23.0.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

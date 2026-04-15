@@ -255,6 +255,10 @@ class MainActivity : ComponentActivity() {
         freeMinutesLeft = loadFreeMinutes()
         restoreAuthSession()
         refreshVoiceApiCapabilities()
+        // Initialise Google Mobile Ads on a background thread (per AdMob guidance).
+        Thread {
+            runCatching { com.google.android.gms.ads.MobileAds.initialize(this@MainActivity) {} }
+        }.start()
 
         checkPermissions()
 
