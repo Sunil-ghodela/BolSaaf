@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BolSaaf app icon: 512x512, 32-bit PNG. Central safe zone ~360x360 for Play adaptive masks. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Brand gradient (same red → purple → blue used everywhere in-app) -->
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0"   stop-color="#E94E5B"/>
+      <stop offset="0.5" stop-color="#A24CB7"/>
+      <stop offset="1"   stop-color="#3D7DDB"/>
+    </linearGradient>
+    <!-- Top-left highlight -->
+    <radialGradient id="glow" cx="30%" cy="25%" r="70%">
+      <stop offset="0"   stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="0.7" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Soft inner vignette for depth -->
+    <radialGradient id="vignette" cx="50%" cy="55%" r="75%">
+      <stop offset="0.55" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1"    stop-color="#000000" stop-opacity="0.18"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background tile (fills the whole 512×512; Play's mask rounds this for us) -->
+  <rect width="512" height="512" fill="url(#brand)"/>
+  <rect width="512" height="512" fill="url(#glow)"/>
+  <rect width="512" height="512" fill="url(#vignette)"/>
+
+  <!-- Voice mark, centered, safe-zone friendly -->
+  <g transform="translate(256 256)" fill="none" stroke="#FFFFFF" stroke-linecap="round">
+    <!-- Outer wave arc (biggest ring, open to the right) -->
+    <path d="M -120 -64 A 136 136 0 1 1 -120 64" stroke-width="24" stroke-opacity="0.85"/>
+    <!-- Middle wave arc -->
+    <path d="M -72 -40 A 80 80 0 1 1 -72 40" stroke-width="22" stroke-opacity="0.92"/>
+    <!-- Inner solid mic / voice dot with tail -->
+    <g fill="#FFFFFF" stroke="none">
+      <circle cx="-12" cy="0" r="26"/>
+      <!-- Subtle tail pointing right — suggests "voice travelling out" -->
+      <path d="M 12 -8 L 64 -8 A 8 8 0 0 1 64 8 L 12 8 Z" fill-opacity="0.95"/>
+    </g>
+  </g>
+
+  <!-- Tiny wordmark chip at the bottom (readable only at ≥256px renders; fades on small) -->
+  <g font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+     text-anchor="middle">
+    <text x="256" y="452" font-size="44" font-weight="800" fill="#FFFFFF" fill-opacity="0.92"
+          letter-spacing="-0.5">BolSaaf</text>
+  </g>
+</svg>
