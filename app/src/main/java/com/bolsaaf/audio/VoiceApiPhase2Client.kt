@@ -2,11 +2,15 @@ package com.bolsaaf.audio
 
 import android.util.Log
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
+import java.net.UnknownHostException
 import java.util.UUID
 
 data class VoiceJobAccepted(
@@ -60,6 +64,32 @@ class VoiceApiPhase2Client(
         private const val TAG = "VoiceApiPhase2Client"
         private const val CONNECT_TIMEOUT_MS = 30_000
         private const val READ_TIMEOUT_MS = 120_000
+
+        /**
+         * Server max upload size for audio clean flows. Server will 413 above this, so
+         * callers should pre-flight check before hitting the network.
+         */
+        const val MAX_AUDIO_UPLOAD_BYTES = 5L * 1024L * 1024L
+    }
+
+    private inline fun <T> runNetwork(operation: String, block: () -> T): T {
+        return try {
+            block()
+        } catch (e: VoiceCleaningException) {
+            throw e
+        } catch (e: SocketTimeoutException) {
+            Log.w(TAG, "$operation timed out", e)
+            throw VoiceCleaningException("Request timed out — please check your connection and retry.", e)
+        } catch (e: UnknownHostException) {
+            Log.w(TAG, "$operation failed to resolve host", e)
+            throw VoiceCleaningException("You appear to be offline — please check your connection.", e)
+        } catch (e: IOException) {
+            Log.w(TAG, "$operation network error", e)
+            throw VoiceCleaningException("Network error — please try again in a moment.", e)
+        } catch (e: JSONException) {
+            Log.w(TAG, "$operation got malformed server response", e)
+            throw VoiceCleaningException("Server returned an unexpected response. Please try again.", e)
+        }
     }
 
     private val siteOrigin: String = run {
@@ -84,7 +114,7 @@ class VoiceApiPhase2Client(
      * Async job: server downloads audio from a public URL (YouTube / Reels / TikTok),
      * then runs the same vocal extract + clean pipeline. Requires matching Django route.
      */
-    fun extractVoiceFromUrl(sourceUrl: String, mode: String = "studio"): VoiceJobAccepted {
+    fun extractVoiceFromUrl(sourceUrl: String, mode: String = "studio"): VoiceJobAccepted = runNetwork("extractVoiceFromUrl") {
         val url = baseUrl.trimEnd('/') + "/extract_from_url/"
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
@@ -105,7 +135,7 @@ class VoiceApiPhase2Client(
         Log.d(TAG, "extract_from_url code=$code body=${body.take(400)}")
         if (code !in 200..299) throw VoiceCleaningException(friendlyHttpError(code, body))
         val j = JSONObject(body)
-        return VoiceJobAccepted(
+        VoiceJobAccepted(
             jobId = j.optInt("job_id"),
             jobType = j.optString("job_type", "extract_from_url"),
             message = j.optString("message", "Job accepted")
@@ -146,7 +176,7 @@ class VoiceApiPhase2Client(
         targetLufs: Float = -16f,
         includeVideo: Boolean = false,
         backgroundPreset: String? = null
-    ): VoiceJobAccepted {
+    ): VoiceJobAccepted = runNetwork("createReelV2") {
         require(file.exists()) { "Input file does not exist: ${file.absolutePath}" }
         val endpoint = baseUrl.trimEnd('/') + "/reel/create/"
         val boundary = "----WebKitFormBoundary${UUID.randomUUID()}"
@@ -197,14 +227,14 @@ class VoiceApiPhase2Client(
         Log.d(TAG, "createReelV2 code=$code body=${body.take(300)}")
         if (code !in 200..299) throw VoiceCleaningException(friendlyHttpError(code, body))
         val j = JSONObject(body)
-        return VoiceJobAccepted(
+        VoiceJobAccepted(
             jobId = j.optInt("reel_job_id"),
             jobType = "reel_v2",
             message = j.optString("message", "Job accepted")
         )
     }
 
-    fun getReelV2Status(reelJobId: Int): ReelV2JobStatus {
+    fun getReelV2Status(reelJobId: Int): ReelV2JobStatus = runNetwork("getReelV2Status") {
         val endpoint = baseUrl.trimEnd('/') + "/reel/$reelJobId/status/"
         val conn = URL(endpoint).openConnection() as HttpURLConnection
         conn.requestMethod = "GET"
@@ -228,7 +258,7 @@ class VoiceApiPhase2Client(
             )
         }
 
-        return ReelV2JobStatus(
+        ReelV2JobStatus(
             reelJobId = j.optInt("reel_job_id", reelJobId),
             status = j.optString("status", "unknown"),
             currentStage = j.optString("current_stage").ifBlank { null },
@@ -263,7 +293,7 @@ class VoiceApiPhase2Client(
         )
     }
 
-    fun getBackgrounds(): List<VoiceBackground> {
+    fun getBackgrounds(): List<VoiceBackground> = runNetwork("getBackgrounds") {
         val endpoint = baseUrl.trimEnd('/') + "/backgrounds/"
         val conn = URL(endpoint).openConnection() as HttpURLConnection
         conn.requestMethod = "GET"
@@ -287,10 +317,10 @@ class VoiceApiPhase2Client(
                 )
             )
         }
-        return list
+        list
     }
 
-    fun getStatus(jobId: Int): VoiceJobStatus {
+    fun getStatus(jobId: Int): VoiceJobStatus = runNetwork("getStatus") {
         val endpoint = baseUrl.trimEnd('/') + "/status/$jobId/"
         val conn = URL(endpoint).openConnection() as HttpURLConnection
         conn.requestMethod = "GET"
@@ -301,7 +331,7 @@ class VoiceApiPhase2Client(
         val body = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         if (code !in 200..299) throw VoiceCleaningException(friendlyHttpError(code, body))
         val j = JSONObject(body)
-        return VoiceJobStatus(
+        VoiceJobStatus(
             jobId = j.optInt("job_id", jobId),
             status = j.optString("status", "unknown"),
             processingMode = j.optString("processing_mode").ifBlank {
@@ -314,7 +344,7 @@ class VoiceApiPhase2Client(
         )
     }
 
-    private fun submitJob(endpoint: String, file: File, fields: Map<String, String>): VoiceJobAccepted {
+    private fun submitJob(endpoint: String, file: File, fields: Map<String, String>): VoiceJobAccepted = runNetwork("submitJob($endpoint)") {
         require(file.exists()) { "Input file does not exist: ${file.absolutePath}" }
         val url = baseUrl.trimEnd('/') + "/" + endpoint.trimStart('/')
         val boundary = "----WebKitFormBoundary${UUID.randomUUID()}"
@@ -348,7 +378,7 @@ class VoiceApiPhase2Client(
         Log.d(TAG, "submitJob endpoint=$endpoint code=$code body=${body.take(240)}")
         if (code !in 200..299) throw VoiceCleaningException(friendlyHttpError(code, body))
         val j = JSONObject(body)
-        return VoiceJobAccepted(
+        VoiceJobAccepted(
             jobId = j.optInt("job_id"),
             jobType = j.optString("job_type", endpoint.trim('/')),
             message = j.optString("message", "Job accepted")

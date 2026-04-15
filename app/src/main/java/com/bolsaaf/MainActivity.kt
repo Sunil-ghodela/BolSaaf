@@ -27,6 +27,7 @@ import com.bolsaaf.audio.AuthApi
 import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.audio.AudioRecorder
 import com.bolsaaf.audio.VoiceApiPhase2Client
+import com.bolsaaf.audio.VoiceCleaningException
 import com.bolsaaf.audio.AdaptiveAudioAnalyzer
 import com.bolsaaf.audio.FeedbackAdaptiveMemory
 import com.bolsaaf.audio.pcm16LeToShortArray
@@ -1474,6 +1475,13 @@ class MainActivity : ComponentActivity() {
         Thread {
             try {
                 saveOriginalFromUri(uri, originalFile)
+                if (flowSnapshot != ProcessingFlow.VIDEO_PROCESS &&
+                    originalFile.length() > VoiceApiPhase2Client.MAX_AUDIO_UPLOAD_BYTES
+                ) {
+                    throw VoiceCleaningException(
+                        "File exceeds the 5 MB server limit — try trimming the audio or pick a shorter clip."
+                    )
+                }
                 isCleaning = true
                 phase2StageName = "queued"
                 phase2OverallProgress = 0
