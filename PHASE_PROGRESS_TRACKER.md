@@ -1,6 +1,131 @@
 # BolSaaf Phase Progress Tracker
 
-**Last Updated**: 2026-04-13 (UI/UX fixes + Settings + Login/Logout)
+**Last Updated**: 2026-04-15 (release-ready: AAB signed, legal URLs hosted, brand theme unified)
+
+## ✅ COMPLETED (April 15)
+
+### Release artifact
+- Signed **AAB** at `app/build/outputs/bundle/release/app-release.aab` (17.0 MB, `bolsaaf-release.jks`).
+- `versionCode = 2`, `versionName = 1.0.1`, `targetSdk = 34`, `minSdk = 24`. Ready to upload to Play Console (Internal testing → Production).
+- Play Store listing fields locked:
+  - Privacy Policy URL → `https://shadowselfwork.com/voice/privacy`
+  - Terms of Service URL → `https://shadowselfwork.com/voice/terms`
+  - Support email → `support@shadowselfwork.com` (stub in the policies)
+  - Category → Music & Audio (alt: Video Players & Editors); Content rating → Everyone.
+
+### Legal pages moved under `/voice/`
+- **Server**: nginx `selfshadowwork` site gained `location = /voice/privacy` and `location = /voice/terms` blocks aliasing the same `/var/www/static-legal/{privacy,terms}.html` files. Backup `selfshadowwork.bak.20260415_061616`. `nginx -t && systemctl reload nginx` clean.
+- **App**: Settings dialog `onPrivacyPolicy` / `onTermsOfService` callbacks in `MainActivity.kt` now open the `/voice/` URLs. Old bare `/privacy` + `/terms` still resolve (un-touched) so existing AABs in the wild keep working.
+
+### Brand theme unified across all screens
+- **Palette source-of-truth**: `ui/theme/BolSaafPalette.kt` rewritten with the screenshot reference colors:
+  - Brand stops: `BrandRed #E94E5B → BrandPurple #A24CB7 → BrandBlue #3D7DDB` (the "Ghar baithe banao" gradient).
+  - Make Reel CTA stops: `MakeReelOrange #FF6B35 → MakeReelRed #FF3D5B`.
+  - Canvas: warm off-white `#FAFAFA`, white cards, near-black text `#1A1A1F`, gray text `#6B7280`.
+  - All legacy names (`ThemeRed`, `ThemeBlue`, `AccentPurple`, `CtaOrangeRedGradient`, `PrimaryGradient`, `SubtitleBluePurple`, …) preserved as aliases so existing call sites compile unchanged.
+- **New `BrandGradient` helper**: `BrandGradient.{Brand, BrandLinear, MakeReel, BrandSoft}` — screens should pull from here instead of inlining `Brush.horizontalGradient(listOf(Color(0xFF…)))`.
+- **`MD3Theme.kt`** light tokens repointed to brand stops (`primary = BrandRed`, `secondary = BrandPurple`, `tertiary = BrandBlue`, `background = #FAFAFA`, `outline = #E5E7EB`). Dark scheme retuned to lifted brand stops on `#121214` for future use.
+- **Light-only by default**: `BolSaafTheme(darkTheme = false)` — pass `true` explicitly to opt into dark. Matches the screenshot reference.
+- **Cleanup**: deleted duplicate `ui/theme/Theme.kt` and `ui/theme/Type.kt` (older blue/red `BolSaafTheme` overload + bare `Typography`). MD3 versions are now the only ones.
+- **First migration**: `HomeScreen.MakeReelBanner` now uses `BrandGradient.MakeReel` instead of three hardcoded color hexes. Other hardcoded gradient sites (per-card accents in `HomeScreen`, comparison/profile screens) left as a follow-up — they read from the alias names so they already render the new brand colors.
+
+### Today's shipped checklist (carried over from morning session)
+
+| #   | Task                                                                                          |
+| --- | --------------------------------------------------------------------------------------------- |
+| 8   | Profile **Plan modal** (Free vs Pro, usage + renewal, BEST VALUE / CURRENT badges, Upgrade CTA) |
+| 11  | Auto-dismiss success banner (3s)                                                              |
+| 12  | Redesigned Quick Clean / Add Vibe / Video Clean cards (gradient icons, per-type accent)        |
+| 13  | Real video thumbnails in Recent Cleans                                                        |
+| 14  | Polish pass on Recent Cleans card                                                             |
+| 15  | Make Reel moved to slim banner below quick cards                                              |
+| 16  | Record Live audio/video bottom sheet (`RecordFormatSheet.kt`)                                 |
+| 17  | Live tab: Audio/Video format toggle + CameraX                                                 |
+| 18  | Privacy/Terms hosted under `/voice/`, URLs wired, versionCode bumped, signed AAB built        |
+| 19  | Add Vibe flow fixed (bottom sheet first, then file)                                           |
+| 20  | Brand theme refresh (red→purple→blue + orange→red), MD3Theme aligned, dup themes deleted     |
+
+### Outside-the-code follow-ups (not for Claude)
+1. Play Console: create app listing → fill descriptions → upload AAB → screenshots / feature graphic / icon.
+2. Decide billing: Pro CTA currently shows a toast; wire Google Play Billing after first release if you want revenue.
+3. Test the AAB via `bundletool` or Internal testing track before promoting to Production.
+
+### Where things live (April 15 deltas)
+- Brand colors + gradients: `app/src/main/java/com/bolsaaf/ui/theme/BolSaafPalette.kt`
+- MD3 light/dark schemes: `app/src/main/java/com/bolsaaf/ui/theme/MD3Theme.kt`
+- Plan modal: `ui/screens/ProfileScreen.kt::PlanDialog` (line ~586) + `PlanCard` helper.
+- Record-format bottom sheet: `ui/screens/RecordFormatSheet.kt`, video record overlay: `ui/components/VideoRecordOverlay.kt`.
+- Legal URLs in app: `MainActivity.kt:539` (privacy) / `:543` (terms).
+- Server: `/etc/nginx/sites-enabled/selfshadowwork` (lines added next to existing `/privacy` + `/terms` blocks).
+
+---
+
+## ✅ COMPLETED (April 14 — evening)
+
+### Free quota (20 min/month)
+- **`MainActivity` companion object**: `FREE_QUOTA_MINUTES = 20`, `QUOTA_WARN_THRESHOLD = 3`.
+- **Persistence**: `SharedPreferences("bolsaaf_quota")` with `period` (yyyyMM) + `left` keys. Auto-resets at the start of each calendar month (`loadFreeMinutes()` called in `onCreate`).
+- **Decrement chokepoint**: single call to `consumeQuotaSeconds(dur)` inside `addAudioPair(...)` — rounds up to nearest minute via `ceil(seconds/60)`, clamps ≥ 0. Covers every successful path (HomeScreen cloud clean, video flow, reel flow, FastLib audio + video) without scattering calls.
+- **Thresholds**: toast warning when crossing to ≤3 min ("3 min free left. Upgrade to Pro for unlimited."); hard alert at 0 ("Free quota used up. Upgrade to Pro to continue.").
+- **Home top-right chip** (`GlassmorphicHeader`): redesigned from plain "N min free" text into a compact pill with **circular progress ring** + `N / 20 min`. Flips to red background + red accent when `freeMinutesLeft ≤ 3`.
+
+### FastLib Lab/Dev screen polish
+- **Phase progress card** during `fastLibIsCleaning`: circular spinner (or filled ring during download %), title flips by stage — `Uploading…` → `Cleaning Audio…` → `Downloading 45%`. 3-step horizontal progress row (Upload → Clean → Download) fills in sequence; the active step shows partial fill (0.6 for processing, real `progressPct/100` for download).
+- **MainActivity stage state**: added `fastLibStage: String?` (uploading/processing/downloading) + `fastLibProgress: Int`. `startFastLibTestCleaning` now transitions them and reuses `downloadFromUrl(..., onProgress)` for byte-granular download %.
+- **Outputs list**: replaced the single `Output Ready: filename` line with a `LazyColumn` of per-job output cards. State: `fastLibOutputs = mutableStateListOf<String>()`, newest-first, capped at 20 entries.
+- **Per-row card** (`OutputRow`): 84×60 thumbnail tile + type chip (AUDIO cyan / VIDEO cyan) + filename + human-readable size (`humanSize()` helper, KB/MB/GB); per-row `Play / Share / Save` buttons.
+- **Video thumbnail**: `VideoThumbnail` composable uses `MediaMetadataRetriever.getFrameAtTime(1_000_000, OPTION_CLOSEST_SYNC)` on `Dispatchers.IO` (via `LaunchedEffect`), renders as `Image(bitmap=..., ContentScale.Crop)`. Play icon overlaid in a circle. Audio rows fall back to MusicNote icon on colored tile.
+
+### FastLib limits (client-side guardrail + info card)
+- **`MainActivity` companion object**: `FASTLIB_MAX_VIDEO_BYTES = 50 MB`, `FASTLIB_MAX_AUDIO_BYTES = 25 MB` (matches nginx `voice_upload` location's `client_max_body_size`).
+- **Early reject**: new `rejectIfOversized(uri, isVideo)` (uses `OpenableColumns.SIZE`) runs in the `pickFast{Audio,Video}Launcher` callbacks. Oversized pick → Toast `"File too large: 73.4 MB. Max 50 MB for video."` and input is not set, no wasted upload.
+- **Info card on screen**: "LAB LIMITS" card (cyan) lists Audio / Video size caps + supported formats + engine info (`DeepFilterNet3 · CPU only · ~1s per 5-10s of audio`). Rate limits intentionally NOT shown in UI per product call — still enforced server-side via DRF `ScopedRateThrottle` (`voice_fastlib_clean` 15/min, `voice_fastlib_video` 5/min) with the friendly-429 toast from the error map if tripped.
+- **Upload box subtitles** now show size in the hint: `MP3, WAV, AAC · ≤25 MB`.
+
+### Where things live
+- Quota: `MainActivity.loadFreeMinutes()`, `consumeQuotaSeconds()`, `quotaPrefs()`; chip in `HomeScreen.GlassmorphicHeader`.
+- FastLib progress + list: `MainActivity.startFastLibTestCleaning` (stage transitions), `FastLibTestScreen` (UI); thumbnail via `VideoThumbnail` composable inside `FastLibTestScreen.kt`.
+- FastLib limits: `MainActivity.rejectIfOversized`/`uriContentSize`; `FastLibTestScreen.LimitsInfoCard` + `LimitLine`.
+
+### Pending for next session
+- **Task 8**: Full Plan modal in Profile screen (Free vs Pro, current usage + renewal, Upgrade CTA stub). `ProfileScreen` already takes `freeQuotaMinutes` / `freeMinutesLeft` / `onUpgrade` props — just needs the modal/dialog itself built out. `FREE_QUOTA_MINUTES` constant is already wired.
+
+---
+
+**Earlier on April 14** (morning):
+
+## ✅ COMPLETED (April 14 — morning)
+
+### Video flow UX
+- **Download progress in Processing dialog**: `downloadFromUrl()` now reports byte progress (128 KB granularity); polling loop sets `phase2StageName` = `processing` → `downloading`; dialog title flips `Cleaning Audio Track…` → `Downloading Video… 45%`. Fixes the "78-second silent spinner" on slow 4G that users reported as "app stuck".
+- **Video items in Recent Cleans**: `MainActivity.playAudioFile` detects `.mp4/.mov/.mkv` and routes to `openVideoExternal()` (FileProvider + `ACTION_VIEW` chooser — MediaPlayer without a Surface can't play video). Recent card shows a `VideoPreviewBox` (cyan badge, filename, "Open" CTA) instead of waveform + side-by-side audio boxes.
+- **Recent Cleans card overhaul**: full redesign — 56dp circular gradient play button with pulse animation, type chip (AUDIO/VIDEO/LIVE) + time + duration on one line, top-right `×` for delete, body adapts (waveform + "compare with original" for audio; full-width "Open in video player" CTA for video), compact icon-only footer row (Share / Save / Feedback).
+
+### Error handling
+- **User-visible rate-limit / size errors**: new `friendlyHttpError(code, body)` helper in `audio/VoiceApiPhase2Client.kt` maps `429` → "Too many requests. Please wait a minute and try again.", `413` → "File too large — max 50 MB for video, 10 MB for audio.", `401/403` → "Not allowed. Please sign in again.", `502/503/504` → "Server is busy — please try again in a moment.". Applied to every non-2xx throw site in `VoiceApiPhase2Client`, `VoiceCleaningApi`, and `MainActivity.downloadFromUrl`.
+
+### Backend (shadowselfwork.com)
+- **Rate limiting (defense-in-depth)**:
+  - **Nginx** `/etc/nginx/nginx.conf`: 3 `limit_req_zone`s — `voice_status` 120r/m, `voice_general` 30r/m, `voice_upload` 10r/m. `/etc/nginx/sites-enabled/selfshadowwork` split `/voice/` into status vs upload locations with zone-specific burst and `client_max_body_size` (1M for status, 50M for upload).
+  - **DRF** scoped throttles on all 15 voice views via `ScopedRateThrottle`: `voice_clean` 20/min, `voice_video` 5/min, `voice_reel` 5/min, `voice_status` 120/min, `voice_health` 60/min, `voice_feedback` 30/min, `voice_extract`/`voice_addbg` 10/min, `voice_fastlib_clean` 15/min, `voice_fastlib_video` 5/min.
+  - **Django**: `DATA_UPLOAD_MAX_MEMORY_SIZE = 60 MB`, `FILE_UPLOAD_MAX_MEMORY_SIZE = 5 MB`.
+  - Backups: `selfshadowwork.bak.20260414_ratelimit`, `settings.py.bak.20260414_ratelimit`.
+  - Verified with hammer test: 120 passes then `429`s kick in (with burst=30).
+- **Real `fast-music-remover` integration** (replacing the "FastLib" stub that just wrapped `StudioPipeline`):
+  - Docker installed + enabled, `ghcr.io/omeryusufyagci/fast-music-remover:latest` running as container `fast-music-remover` on `127.0.0.1:8088` (restart=unless-stopped).
+  - `apps/voice/tasks.py` new helper `_run_fast_music_remover(input_path, output_basename)` — POSTs multipart file, reads `media_url` from JSON, streams result back into `MEDIA_ROOT/cleaned/`. Both `fastlib_clean_task` and `fastlib_video_task` rewritten to use it; `processing_mode` set to `"fastlib"` so the status payload distinguishes from `studio`.
+  - Verified end-to-end: job 107, 1 MB MP3 → 8.86s → 5.3 MB WAV downloadable at `/voice/cleaned_output/107/`.
+  - Backup: `tasks.py.bak.20260414_fastlib`.
+
+### Where things live
+- Download progress: `MainActivity.downloadFromUrl` + `processingDialogTitle`/`Subtitle`.
+- Video routing: `MainActivity.playAudioFile` + `openVideoExternal`; `HomeScreen.ComparisonCard` (`isVideo` branch + `VideoPreviewBox`).
+- Error map: `app/src/main/java/com/bolsaaf/audio/VoiceApiPhase2Client.kt` bottom.
+- Backend FastLib: `/opt/fast-music-remover-tmp/` (reference clone), container `fast-music-remover`, tasks at `/var/www/simplelms/backend/apps/voice/tasks.py`.
+
+---
+
+**Previous**: 2026-04-13 (UI/UX fixes + Settings + Login/Logout)
 
 ## ✅ COMPLETED UI/UX FIXES (April 13)
 

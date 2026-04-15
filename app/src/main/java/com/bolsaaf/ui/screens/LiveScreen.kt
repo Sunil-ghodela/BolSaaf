@@ -48,6 +48,9 @@ fun LiveScreen(
     currentlyPlaying: String? = null,
     cleaningPreset: CleaningPreset = CleaningPreset.NORMAL,
     modeAvailabilityNote: String? = null,
+    isVideoMode: Boolean = false,
+    onToggleFormat: (Boolean) -> Unit = {},
+    onStartVideoRecording: () -> Unit = {},
     onCleaningPresetChange: (CleaningPreset) -> Unit = {},
     onStartRecording: () -> Unit = {},
     onStopRecording: () -> Unit = {},
@@ -115,7 +118,30 @@ fun LiveScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(20.dp))
-            
+
+            // Format toggle: Audio ⟷ Video
+            if (!isRecording) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    FormatToggleChip(
+                        label = "🎙️ Audio",
+                        isSelected = !isVideoMode,
+                        onClick = { onToggleFormat(false) }
+                    )
+                    FormatToggleChip(
+                        label = "🎬 Video",
+                        isSelected = isVideoMode,
+                        onClick = { onToggleFormat(true) }
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // Main visualization area with microphone
             Box(
                 modifier = Modifier.size(300.dp),
@@ -371,7 +397,13 @@ fun LiveScreen(
                             else MaterialTheme.colorScheme.primary
                         )
                         .clickable {
-                            if (isRecording) onStopRecording() else onStartRecording()
+                            if (isRecording) {
+                                onStopRecording()
+                            } else if (isVideoMode) {
+                                onStartVideoRecording()
+                            } else {
+                                onStartRecording()
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -404,6 +436,31 @@ fun LiveScreen(
             modifier = Modifier.align(Alignment.BottomCenter),
             selectedTab = selectedTab,
             onTabSelected = onTabSelected
+        )
+    }
+}
+
+@Composable
+private fun FormatToggleChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick),
+        color = if (isSelected) MaterialTheme.colorScheme.primary
+                else Color.Transparent,
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

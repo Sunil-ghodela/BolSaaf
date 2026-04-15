@@ -8,6 +8,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -30,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.ui.animation.MD3Motion
 import com.bolsaaf.ui.components.BottomNavBar
@@ -61,6 +64,7 @@ fun ProfileScreen(
 ) {
     val scroll = rememberScrollState()
     var showLoginDialog by remember { mutableStateOf(false) }
+    var showPlanDialog by remember { mutableStateOf(false) }
     var emailInput by remember { mutableStateOf("") }
     var passwordInput by remember { mutableStateOf("") }
 
@@ -306,7 +310,7 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
-                        onClick = onUpgrade,
+                        onClick = { showPlanDialog = true },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp),
@@ -326,7 +330,7 @@ fun ProfileScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Upgrade plan",
+                                text = "View plans",
                                 color = Color.Black,
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.titleSmall
@@ -463,6 +467,20 @@ fun ProfileScreen(
             selectedTab = selectedTab,
             onTabSelected = onTabSelected
         )
+
+        if (showPlanDialog) {
+            PlanDialog(
+                freeMinutesLeft = freeMinutesLeft,
+                freeQuotaMinutes = freeQuotaMinutes,
+                isProMember = showProMemberBadge,
+                renewalLabel = renewalLabel,
+                onDismiss = { showPlanDialog = false },
+                onUpgrade = {
+                    showPlanDialog = false
+                    onUpgrade()
+                }
+            )
+        }
     }
 }
 
@@ -562,4 +580,311 @@ private fun formatAudioHours(minutes: Float): String {
     val h = (minutes / 60f).toInt()
     val m = (minutes % 60f).toInt().coerceAtLeast(0)
     return if (h > 0) "${h}h ${m}m" else "${m}m"
+}
+
+@Composable
+fun PlanDialog(
+    freeMinutesLeft: Int,
+    freeQuotaMinutes: Int,
+    isProMember: Boolean,
+    renewalLabel: String,
+    onDismiss: () -> Unit,
+    onUpgrade: () -> Unit
+) {
+    val usedFraction = if (freeQuotaMinutes <= 0) 0f
+        else ((freeQuotaMinutes - freeMinutesLeft).coerceAtLeast(0) / freeQuotaMinutes.toFloat())
+            .coerceIn(0f, 1f)
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .padding(vertical = 12.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 12.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Your plan",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Current usage progress
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "This month",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "$freeMinutesLeft / $freeQuotaMinutes min left",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = usedFraction,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Resets on $renewalLabel",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Free plan card
+                PlanCard(
+                    title = "Free",
+                    price = "₹0",
+                    priceSuffix = "/month",
+                    isCurrent = !isProMember,
+                    accentColor = MaterialTheme.colorScheme.primary,
+                    bullets = listOf(
+                        "$freeQuotaMinutes min voice cleaning / month",
+                        "Basic + standard cleaning modes",
+                        "Cloud + on-device processing",
+                        "Video audio clean (up to 50 MB)"
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Pro plan card
+                PlanCard(
+                    title = "Pro",
+                    price = "₹299",
+                    priceSuffix = "/month",
+                    isCurrent = isProMember,
+                    accentColor = Color(0xFFFF9800),
+                    isHighlighted = true,
+                    bullets = listOf(
+                        "Unlimited voice cleaning",
+                        "Studio + Pro cleaning modes (DeepFilterNet)",
+                        "FastLib lab access",
+                        "Priority processing queue",
+                        "Video export without watermark",
+                        "Reel presets: Podcast, Rain, Cafe, Viral",
+                        "Ad-free"
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                if (!isProMember) {
+                    Button(
+                        onClick = onUpgrade,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                        contentPadding = PaddingValues(),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    brush = Brush.horizontalGradient(
+                                        listOf(Color(0xFFFF9800), Color(0xFFFFCA28))
+                                    ),
+                                    shape = RoundedCornerShape(14.dp)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Upgrade to Pro",
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .background(
+                                MaterialTheme.colorScheme.secondaryContainer,
+                                RoundedCornerShape(14.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "✓ You're on Pro",
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "Cancel anytime. Billed monthly.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlanCard(
+    title: String,
+    price: String,
+    priceSuffix: String,
+    isCurrent: Boolean,
+    accentColor: Color,
+    isHighlighted: Boolean = false,
+    bullets: List<String>
+) {
+    val bg = if (isHighlighted) accentColor.copy(alpha = 0.08f)
+             else MaterialTheme.colorScheme.surfaceContainer
+    val borderColor = if (isHighlighted || isCurrent) accentColor
+                      else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = bg,
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (isHighlighted || isCurrent) 2.dp else 1.dp,
+            color = borderColor
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (isHighlighted) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = accentColor
+                            ) {
+                                Text(
+                                    text = "BEST VALUE",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    fontSize = 9.sp
+                                )
+                            }
+                        }
+                        if (isCurrent) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    text = "CURRENT",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    fontSize = 9.sp
+                                )
+                            }
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = price,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = accentColor
+                    )
+                    Text(
+                        text = priceSuffix,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp, start = 2.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            bullets.forEach { bullet ->
+                Row(
+                    modifier = Modifier.padding(vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = bullet,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
 }

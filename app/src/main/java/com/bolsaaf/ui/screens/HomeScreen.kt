@@ -69,6 +69,7 @@ import com.bolsaaf.ui.theme.AccentGreen
 import com.bolsaaf.ui.theme.AccentPurple
 import com.bolsaaf.ui.theme.BackgroundCard
 import com.bolsaaf.ui.theme.BackgroundDark
+import com.bolsaaf.ui.theme.BrandGradient
 import com.bolsaaf.ui.theme.CtaOrangeRedGradient
 import com.bolsaaf.ui.theme.NavUnselected
 import com.bolsaaf.ui.theme.PanelOverlay
@@ -80,7 +81,9 @@ import com.bolsaaf.ui.theme.SurfaceStripe
 import com.bolsaaf.ui.theme.TextPrimary
 import com.bolsaaf.ui.theme.TextSecondary
 import com.bolsaaf.ui.theme.ThemeBlue
+import com.bolsaaf.ui.theme.ThemeBlueLight
 import com.bolsaaf.ui.theme.ThemeRed
+import com.bolsaaf.ui.theme.ThemeRedLight
 import com.bolsaaf.ui.theme.TitleVideoAccent
 import com.bolsaaf.audio.AdaptiveAudioAnalyzer
 import com.bolsaaf.audio.CleaningPreset
@@ -144,9 +147,11 @@ fun HomeScreen(
     onCancelUpload: () -> Unit = {},
     onGoToHistory: () -> Unit = {},
     onTabSelected: (Int) -> Unit = {},
+    onDismissSuccess: () -> Unit = {},
     audioPairs: List<AudioPair> = emptyList(),
     currentProcessedPair: AudioPair? = null,
-    freeMinutesLeft: Int = 8,
+    freeMinutesLeft: Int = 20,
+    freeQuotaMinutes: Int = 20,
     currentlyPlaying: String? = null,
     onPlayFile: (String) -> Unit = {},
     onStopFile: () -> Unit = {},
@@ -165,7 +170,8 @@ fun HomeScreen(
     onOpenSettings: () -> Unit = {}
 ) {
     var feedbackPair by remember { mutableStateOf<AudioPair?>(null) }
-    
+    var showVibeSheet by remember { mutableStateOf(false) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -232,6 +238,7 @@ fun HomeScreen(
                 // Header with glassmorphism
                 GlassmorphicHeader(
                     freeMinutesLeft = freeMinutesLeft,
+                    freeQuotaMinutes = freeQuotaMinutes,
                     onGoToHistory = onGoToHistory
                 )
                 
@@ -255,8 +262,10 @@ fun HomeScreen(
                         onUploadFile()
                     },
                     onAddVibe = {
-                        onProcessingModeChange(2)
-                        onUploadFile()
+                        // Show the vibe sheet FIRST — picking a vibe before the file
+                        // makes the flow one clear step instead of "upload then scroll
+                        // down to find the vibe picker".
+                        showVibeSheet = true
                     },
                     onVideoClean = {
                         // Single atomic callback: MainActivity sets
@@ -281,13 +290,23 @@ fun HomeScreen(
 
                 if (showBackgroundControls) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Choose Vibe 🌊",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = TextSecondary,
-                        modifier = Modifier.padding(horizontal = 32.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 32.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Vibe: ${backgroundLabels.getOrNull(selectedBackgroundIndex) ?: "—"}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AccentPurple
+                        )
+                        TextButton(onClick = { showVibeSheet = true }) {
+                            Text("Change", color = AccentPurple, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
                     if (!adaptiveAnalysisLoading && adaptiveProfile != null) {
                         val vibeHint = VibeUi.suggestedVibeLine(adaptiveProfile)
                         if (vibeHint != null) {
@@ -300,21 +319,6 @@ fun HomeScreen(
                                 modifier = Modifier.padding(horizontal = 32.dp)
                             )
                         }
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    if (backgroundLabels.isNotEmpty()) {
-                        ModeSelector(
-                            modes = backgroundLabels,
-                            selectedIndex = selectedBackgroundIndex.coerceIn(0, backgroundLabels.lastIndex),
-                            onModeSelected = onBackgroundIndexChange
-                        )
-                    } else {
-                        Text(
-                            text = "Loading vibes…",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFFFA726),
-                            modifier = Modifier.padding(horizontal = 32.dp)
-                        )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -463,6 +467,13 @@ fun HomeScreen(
             onTabSelected = onTabSelected
         )
 
+        // Auto-dismiss after 3s so the banner doesn't stick forever.
+        LaunchedEffect(showSuccess) {
+            if (showSuccess) {
+                kotlinx.coroutines.delay(3000L)
+                onDismissSuccess()
+            }
+        }
         AnimatedVisibility(
             visible = showSuccess && lastSaveInfo != null,
             modifier = Modifier
@@ -472,7 +483,11 @@ fun HomeScreen(
             enter = fadeIn(),
             exit = fadeOut()
         ) {
-            lastSaveInfo?.let { SuccessCleanBanner(it) }
+            lastSaveInfo?.let {
+                Box(modifier = Modifier.clickable { onDismissSuccess() }) {
+                    SuccessCleanBanner(it)
+                }
+            }
         }
 
         // Upload Progress Dialog
@@ -517,6 +532,21 @@ fun HomeScreen(
                 }
             )
         }
+
+        if (showVibeSheet) {
+            VibePickerSheet(
+                vibes = backgroundLabels,
+                selectedIndex = selectedBackgroundIndex.coerceIn(0, backgroundLabels.lastIndex.coerceAtLeast(0)),
+                onDismiss = { showVibeSheet = false },
+                onPicked = { idx ->
+                    onBackgroundIndexChange(idx)
+                    showVibeSheet = false
+                    // Now that the vibe is chosen, start the add-background flow.
+                    onProcessingModeChange(2)
+                    onUploadFile()
+                }
+            )
+        }
     }
 }
 
@@ -541,12 +571,47 @@ fun ActionGrid(
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
     ) {
-        // Hero card — Make Reel (recommended)
+        // Primary row — 3 distinct gradient tiles.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            SecondaryActionCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Filled.CheckCircle,
+                title = "Quick Clean",
+                hint = "Remove noise",
+                accentGradient = Brush.linearGradient(listOf(ThemeBlue, ThemeBlueLight)),
+                accentColor = ThemeBlue,
+                onClick = onQuickClean
+            )
+            SecondaryActionCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Filled.Add,
+                title = "Add Vibe",
+                hint = "Rain, cafe, ocean",
+                accentGradient = Brush.linearGradient(listOf(AccentPurple, ThemeRed)),
+                accentColor = AccentPurple,
+                onClick = onAddVibe
+            )
+            SecondaryActionCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Filled.PlayArrow,
+                title = "Video Clean",
+                hint = "Clean in video",
+                accentGradient = Brush.linearGradient(listOf(ThemeBlue, AccentCyan)),
+                accentColor = AccentCyan,
+                onClick = onVideoClean
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Slim Make Reel banner below the primary cards.
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = 96.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(14.dp))
                 .background(CtaOrangeRedGradient)
                 .clickable(onClick = onMakeReel)
                 .semantics { },
@@ -555,90 +620,32 @@ fun ActionGrid(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    shape = CircleShape,
-                    color = Color.White.copy(alpha = 0.22f),
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Icon(
-                            imageVector = Icons.Filled.Star,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(14.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Make Reel",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color.White.copy(alpha = 0.22f)
-                        ) {
-                            Text(
-                                "RECOMMENDED",
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "One tap → clean voice + background + loudness",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.92f)
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Filled.Star,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Make Reel — one tap → clean + vibe + loudness",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Secondary action row — 3 cards, each self-describing.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            SecondaryActionCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Filled.PlayArrow,
-                title = "Quick Clean",
-                hint = "Remove noise",
-                onClick = onQuickClean
-            )
-            SecondaryActionCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Filled.Home,
-                title = "Add Vibe",
-                hint = "Mix rain, cafe, ocean",
-                onClick = onAddVibe
-            )
-            SecondaryActionCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Filled.PlayArrow,
-                title = "Video Clean",
-                hint = "Clean audio in video",
-                onClick = onVideoClean
-            )
         }
     }
 }
@@ -649,49 +656,57 @@ private fun SecondaryActionCard(
     icon: ImageVector,
     title: String,
     hint: String,
+    accentGradient: Brush,
+    accentColor: Color,
     onClick: () -> Unit
 ) {
     Surface(
         modifier = modifier
-            .defaultMinSize(minHeight = 96.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .defaultMinSize(minHeight = 112.dp)
+            .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 1.dp,
+        color = BackgroundCard,
+        shadowElevation = 2.dp,
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = accentColor.copy(alpha = 0.18f)
+        )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(36.dp)
+            // Gradient icon tile
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(accentGradient),
+                contentAlignment = Alignment.Center
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
             }
             Column {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = hint,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = TextSecondary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -703,6 +718,7 @@ private fun SecondaryActionCard(
 @Composable
 fun GlassmorphicHeader(
     freeMinutesLeft: Int,
+    freeQuotaMinutes: Int = 20,
     onGoToHistory: () -> Unit
 ) {
     ElevatedCard(
@@ -756,25 +772,50 @@ fun GlassmorphicHeader(
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
+                val safeQuota = freeQuotaMinutes.coerceAtLeast(1)
+                val leftFrac = (freeMinutesLeft.coerceAtLeast(0) / safeQuota.toFloat())
+                    .coerceIn(0f, 1f)
+                val isLow = freeMinutesLeft <= 3
+                val chipBg = if (isLow) {
+                    Color(0xFFFFE5E5)
+                } else {
+                    MaterialTheme.colorScheme.primaryContainer
+                }
+                val chipAccent = if (isLow) {
+                    Color(0xFFE34C52)
+                } else {
+                    MaterialTheme.colorScheme.primary
+                }
+                val chipText = if (isLow) {
+                    Color(0xFFB3261E)
+                } else {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                }
                 Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
+                    color = chipBg,
                     shape = RoundedCornerShape(20.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
+                            modifier = Modifier.size(18.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                progress = leftFrac,
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.5.dp,
+                                color = chipAccent,
+                                trackColor = chipAccent.copy(alpha = 0.22f)
+                            )
+                        }
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            "$freeMinutesLeft min free",
+                            "$freeMinutesLeft / $freeQuotaMinutes min",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            color = chipText,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -1182,6 +1223,9 @@ fun ComparisonCard(
     val isOriginalPlaying = currentlyPlaying == pair.originalFile
     val isCleanedPlaying = currentlyPlaying == pair.cleanedFile
     val cleanedPath = File(recordingsDir, pair.cleanedFile)
+    val isVideo = pair.cleanedFile.endsWith(".mp4", ignoreCase = true) ||
+        pair.cleanedFile.endsWith(".mov", ignoreCase = true) ||
+        pair.cleanedFile.endsWith(".mkv", ignoreCase = true)
 
     // Animation states
     var isVisible by remember { mutableStateOf(false) }
@@ -1198,122 +1242,517 @@ fun ComparisonCard(
         label = "alpha"
     )
 
+    val accent = when {
+        isVideo -> AccentCyan
+        pair.isRecording -> AccentPurple
+        else -> ThemeBlue
+    }
+    val accentGradient = Brush.linearGradient(
+        colors = when {
+            isVideo -> listOf(ThemeBlue, AccentCyan)
+            pair.isRecording -> listOf(ThemeRedLight, ThemeRed)
+            else -> listOf(ThemeBlue, ThemeBlueLight)
+        }
+    )
+    val typeLabel = when {
+        isVideo -> "VIDEO"
+        pair.isRecording -> "LIVE"
+        else -> "AUDIO"
+    }
+    val anyPlaying = isOriginalPlaying || isCleanedPlaying
+    val playPulse by rememberInfiniteTransition(label = "playPulse").animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(700, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "playPulseScale"
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp, horizontal = 4.dp)
+            .padding(vertical = 6.dp, horizontal = 4.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
                 this.alpha = alpha
             },
         colors = CardDefaults.cardColors(containerColor = BackgroundCard),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         border = androidx.compose.foundation.BorderStroke(
             width = 1.dp,
-            color = SliderTrackStrong.copy(alpha = 0.3f)
+            color = accent.copy(alpha = 0.18f)
         )
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Header: gradient strip with play button + meta
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = pair.time,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = TextSecondary
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                accent.copy(alpha = 0.12f),
+                                accent.copy(alpha = 0.04f),
+                                Color.Transparent
+                            )
+                        )
                     )
-                    if (pair.durationSec > 0f) {
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Big gradient play button
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .graphicsLayer {
+                            if (anyPlaying) {
+                                scaleX = playPulse
+                                scaleY = playPulse
+                            }
+                        }
+                        .background(accentGradient, CircleShape)
+                        .clickable { onPlayCleaned() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = "Play",
+                        tint = Color.White,
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = accent.copy(alpha = 0.18f)
+                        ) {
+                            Text(
+                                text = typeLabel,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = accent,
+                                fontSize = 10.sp,
+                                letterSpacing = 0.8.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = String.format(Locale.US, "%.1f s", pair.durationSec),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = AccentGreen.copy(alpha = 0.9f)
+                            text = pair.time,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = TextSecondary
+                        )
+                        if (pair.durationSec > 0f) {
+                            Text(
+                                text = " · ${String.format(Locale.US, "%.1fs", pair.durationSec)}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = if (isVideo) "Cleaned Video" else "Cleaned Audio",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = pair.cleanedFile,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(
+                    onClick = onRemove,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Delete",
+                        tint = TextSecondary.copy(alpha = 0.7f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // Body: thumbnail (video) or waveform (audio).
+            if (isVideo) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp)
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(accent.copy(alpha = 0.12f))
+                        .clickable { onPlayCleaned() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    VideoThumbnail(file = cleanedPath)
+                    // Dark gradient scrim for play-button legibility
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.28f)
+                                    )
+                                )
+                            )
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(accent),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.PlayArrow,
+                            contentDescription = "Play video",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
                         )
                     }
                 }
-                Surface(
-                    color = if (pair.isRecording) AccentPurple.copy(alpha = 0.2f) else BackgroundCard,
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text(
-                        text = if (pair.isRecording) "Live" else "Processed",
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (pair.isRecording) AccentPurple else AccentGreen
-                    )
+            } else {
+                Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)) {
+                    MiniWaveformStrip(cleanedPath, modifier = Modifier.fillMaxWidth())
+                }
+                if (pair.originalFile != pair.cleanedFile) {
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 10.dp)
+                            .clickable { onPlayOriginal() }
+                            .padding(horizontal = 6.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isOriginalPlaying) Icons.Filled.Close else Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            tint = AccentGreen,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (isOriginalPlaying) "Stop original" else "Compare with original",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = AccentGreen
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            MiniWaveformStrip(cleanedPath, modifier = Modifier.fillMaxWidth())
-
-            Spacer(modifier = Modifier.height(10.dp))
-
+            // Footer: compact icon-only action row
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .background(SurfaceStripe.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                AudioSideBox(
-                    modifier = Modifier.weight(1f),
-                    title = "🎤 Original",
-                    fileName = pair.originalFile,
-                    isPlaying = isOriginalPlaying,
-                    onPlay = onPlayOriginal,
-                    borderColor = Color(0xFFFF9800).copy(alpha = 0.5f)
-                )
-                AudioSideBox(
-                    modifier = Modifier.weight(1f),
-                    title = "✨ Cleaned",
-                    fileName = pair.cleanedFile,
-                    isPlaying = isCleanedPlaying,
-                    onPlay = onPlayCleaned,
-                    borderColor = AccentGreen.copy(alpha = 0.5f)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                VoiceActionPill(
-                    modifier = Modifier.weight(1f),
+                CompactActionIcon(
                     icon = Icons.AutoMirrored.Filled.Send,
                     label = "Share",
+                    tint = accent,
                     onClick = onShare
                 )
-                VoiceActionPill(
-                    modifier = Modifier.weight(1f),
+                CompactActionIcon(
                     icon = Icons.Filled.CheckCircle,
                     label = "Save",
+                    tint = AccentGreen,
                     onClick = onDownload
                 )
-                VoiceActionPill(
-                    modifier = Modifier.weight(1f),
+                CompactActionIcon(
                     icon = Icons.Filled.Info,
                     label = "Feedback",
+                    tint = TextSecondary,
                     onClick = onFeedback
                 )
-                VoiceActionPill(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Filled.Close,
-                    label = "Delete",
-                    tint = Color(0xFFEF5350),
-                    onClick = onRemove
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactActionIcon(
+    icon: ImageVector,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = TextSecondary,
+            fontSize = 10.sp
+        )
+    }
+}
+
+@Composable
+private fun VibePickerSheet(
+    vibes: List<String>,
+    selectedIndex: Int,
+    onDismiss: () -> Unit,
+    onPicked: (Int) -> Unit
+) {
+    // Vibe-label → emoji mapping (fallback: 🎵). Kept tiny so any label flows through.
+    fun emojiFor(label: String): String {
+        val l = label.lowercase(Locale.getDefault())
+        return when {
+            "rain" in l -> "🌧️"
+            "cafe" in l || "coffee" in l -> "☕"
+            "ocean" in l || "sea" in l || "wave" in l -> "🌊"
+            "street" in l || "city" in l || "traffic" in l -> "🏙️"
+            "forest" in l || "jungle" in l -> "🌳"
+            "night" in l -> "🌙"
+            "fire" in l -> "🔥"
+            "wind" in l -> "🌬️"
+            "crowd" in l || "party" in l -> "👥"
+            "bird" in l -> "🐦"
+            else -> "🎵"
+        }
+    }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null
+                ) { onDismiss() },
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) { /* swallow bg taps inside sheet */ },
+                color = BackgroundCard,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                shadowElevation = 8.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                ) {
+                    // Grab handle
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .size(width = 36.dp, height = 4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(TextSecondary.copy(alpha = 0.3f))
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Choose a vibe",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "We'll mix it with your voice after you pick a file.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (vibes.isEmpty()) {
+                        Text(
+                            text = "Loading vibes…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(vertical = 16.dp)
+                        )
+                    } else {
+                        // 2-column flow: chunk into rows of 2.
+                        vibes.chunked(2).forEachIndexed { rowIdx, row ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                row.forEachIndexed { colIdx, label ->
+                                    val idx = rowIdx * 2 + colIdx
+                                    val isSelected = idx == selectedIndex
+                                    Surface(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .defaultMinSize(minHeight = 80.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .clickable { onPicked(idx) },
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = if (isSelected) AccentPurple.copy(alpha = 0.12f) else SurfaceStripe,
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            width = if (isSelected) 2.dp else 1.dp,
+                                            color = if (isSelected) AccentPurple else SliderTrackStrong.copy(alpha = 0.4f)
+                                        )
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = emojiFor(label),
+                                                fontSize = 26.sp
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text(
+                                                text = label,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (isSelected) AccentPurple else TextPrimary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            if (isSelected) {
+                                                Icon(
+                                                    imageVector = Icons.Filled.CheckCircle,
+                                                    contentDescription = null,
+                                                    tint = AccentPurple,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                if (row.size == 1) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("Cancel", color = TextSecondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoThumbnail(file: File) {
+    var bmp by remember(file.absolutePath) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(file.absolutePath) {
+        bmp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val r = android.media.MediaMetadataRetriever()
+                r.setDataSource(file.absolutePath)
+                val frame = r.getFrameAtTime(1_000_000, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                r.release()
+                frame
+            }.getOrNull()
+        }
+    }
+    bmp?.let {
+        androidx.compose.foundation.Image(
+            bitmap = it.asImageBitmap(),
+            contentDescription = "Video thumbnail",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+        )
+    }
+}
+
+@Composable
+private fun VideoPreviewBox(
+    fileName: String,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .clickable { onOpen() }
+            .border(1.dp, AccentCyan.copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
+        shape = RoundedCornerShape(14.dp),
+        color = AccentCyan.copy(alpha = 0.08f)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = AccentCyan.copy(alpha = 0.18f),
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = "Open video",
+                        tint = AccentCyan,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Cleaned Video",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary
+                )
+                Text(
+                    text = fileName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
+            Text(
+                text = "Open",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = AccentCyan
+            )
         }
     }
 }
@@ -2053,14 +2492,6 @@ fun MakeReelBanner(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val gradientBrush = Brush.horizontalGradient(
-        colors = listOf(
-            Color(0xFFE34C52),
-            Color(0xFFFF7043),
-            Color(0xFFFF8A65)
-        )
-    )
-
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -2074,7 +2505,7 @@ fun MakeReelBanner(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(gradientBrush),
+                .background(BrandGradient.MakeReel),
             contentAlignment = Alignment.Center
         ) {
             Row(

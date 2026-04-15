@@ -107,7 +107,7 @@ class VoiceCleaningApi(
 
         if (code !in 200..299) {
             Log.e(TAG, "API error $code: $responseText")
-            throw VoiceCleaningException("Server returned $code: $responseText")
+            throw VoiceCleaningException(friendlyHttpError(code, responseText))
         }
 
         val json = try {
@@ -172,7 +172,7 @@ class VoiceCleaningApi(
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream ?: conn.inputStream
         val body = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         if (code !in 200..299) {
-            throw VoiceCleaningException("Health check failed: HTTP $code $body")
+            throw VoiceCleaningException(friendlyHttpError(code, body))
         }
 
         val j = try {
@@ -301,7 +301,7 @@ class VoiceCleaningApi(
         if (code !in 200..299) {
             val raw = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
             val err = shortenHttpErrorBody(raw)
-            throw VoiceCleaningException("Download failed: HTTP $code $err")
+            throw VoiceCleaningException(friendlyHttpError(code, err))
         }
 
         BufferedInputStream(connection.inputStream).use { input ->

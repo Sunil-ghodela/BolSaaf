@@ -103,7 +103,7 @@ class VoiceApiPhase2Client(
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream ?: conn.inputStream
         val body = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         Log.d(TAG, "extract_from_url code=$code body=${body.take(400)}")
-        if (code !in 200..299) throw VoiceCleaningException("extract_from_url failed: HTTP $code $body")
+        if (code !in 200..299) throw VoiceCleaningException(friendlyHttpError(code, body))
         val j = JSONObject(body)
         return VoiceJobAccepted(
             jobId = j.optInt("job_id"),
@@ -195,7 +195,7 @@ class VoiceApiPhase2Client(
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream ?: conn.inputStream
         val body = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         Log.d(TAG, "createReelV2 code=$code body=${body.take(300)}")
-        if (code !in 200..299) throw VoiceCleaningException("Reel V2 create failed: HTTP $code $body")
+        if (code !in 200..299) throw VoiceCleaningException(friendlyHttpError(code, body))
         val j = JSONObject(body)
         return VoiceJobAccepted(
             jobId = j.optInt("reel_job_id"),
@@ -213,7 +213,7 @@ class VoiceApiPhase2Client(
         val code = conn.responseCode
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream ?: conn.inputStream
         val body = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-        if (code !in 200..299) throw VoiceCleaningException("Reel V2 status failed: HTTP $code $body")
+        if (code !in 200..299) throw VoiceCleaningException(friendlyHttpError(code, body))
         val j = JSONObject(body)
 
         val outputsObj = j.optJSONObject("outputs")
@@ -272,7 +272,7 @@ class VoiceApiPhase2Client(
         val code = conn.responseCode
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream ?: conn.inputStream
         val body = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-        if (code !in 200..299) throw VoiceCleaningException("Background list failed: HTTP $code $body")
+        if (code !in 200..299) throw VoiceCleaningException(friendlyHttpError(code, body))
         val json = JSONObject(body)
         val arr = json.optJSONArray("backgrounds") ?: JSONArray()
         val list = ArrayList<VoiceBackground>()
@@ -299,7 +299,7 @@ class VoiceApiPhase2Client(
         val code = conn.responseCode
         val stream: InputStream = if (code in 200..299) conn.inputStream else conn.errorStream ?: conn.inputStream
         val body = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-        if (code !in 200..299) throw VoiceCleaningException("Status failed: HTTP $code $body")
+        if (code !in 200..299) throw VoiceCleaningException(friendlyHttpError(code, body))
         val j = JSONObject(body)
         return VoiceJobStatus(
             jobId = j.optInt("job_id", jobId),
@@ -346,7 +346,7 @@ class VoiceApiPhase2Client(
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream ?: conn.inputStream
         val body = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         Log.d(TAG, "submitJob endpoint=$endpoint code=$code body=${body.take(240)}")
-        if (code !in 200..299) throw VoiceCleaningException("Submit job failed: HTTP $code $body")
+        if (code !in 200..299) throw VoiceCleaningException(friendlyHttpError(code, body))
         val j = JSONObject(body)
         return VoiceJobAccepted(
             jobId = j.optInt("job_id"),
@@ -361,5 +361,18 @@ class VoiceApiPhase2Client(
         if (p.startsWith("http://", true) || p.startsWith("https://", true)) return p
         if (p.startsWith("/")) return siteOrigin + p
         return "$siteOrigin/$p"
+    }
+}
+
+/** Map server HTTP codes to user-facing messages. */
+internal fun friendlyHttpError(code: Int, body: String? = null): String = when (code) {
+    413 -> "File too large — max 50 MB for video, 10 MB for audio."
+    429 -> "Too many requests. Please wait a minute and try again."
+    502, 503, 504 -> "Server is busy — please try again in a moment."
+    401, 403 -> "Not allowed. Please sign in again."
+    in 500..599 -> "Server error ($code). Please try again shortly."
+    else -> {
+        val snippet = body?.trim().orEmpty().take(120)
+        if (snippet.isNotEmpty()) "HTTP $code — $snippet" else "HTTP $code"
     }
 }

@@ -51,6 +51,14 @@ import kotlin.math.sqrt
 class MainActivity : ComponentActivity() {
     companion object {
         private const val TAG = "MainActivity"
+        const val FREE_QUOTA_MINUTES = 20
+        const val QUOTA_WARN_THRESHOLD = 3
+        // FastLib caps (must stay ≤ server nginx `voice_upload` client_max_body_size = 50M).
+        const val FASTLIB_MAX_VIDEO_BYTES: Long = 50L * 1024 * 1024  // 50 MB
+        const val FASTLIB_MAX_AUDIO_BYTES: Long = 25L * 1024 * 1024  // 25 MB soft cap for audio
+        // Rate limits — informational (enforced server-side via DRF ScopedRateThrottle).
+        const val FASTLIB_RATE_AUDIO_PER_MIN = 15
+        const val FASTLIB_RATE_VIDEO_PER_MIN = 5
     }
 
     private lateinit var audioProcessor: AudioProcessor
@@ -73,7 +81,7 @@ class MainActivity : ComponentActivity() {
     private var lastSaveInfo by mutableStateOf<SaveInfo?>(null)
     private var cleaningPreset by mutableStateOf(CleaningPreset.NORMAL)
     private var processingFlow by mutableStateOf(ProcessingFlow.REEL_MODE)
-    private var freeMinutesLeft by mutableIntStateOf(8)
+    private var freeMinutesLeft by mutableIntStateOf(FREE_QUOTA_MINUTES)
     /** Order matches Home flow chips: Reel first (product default). */
     private enum class ProcessingFlow {
         REEL_MODE, CLEAN, ADD_BACKGROUND, VIDEO_PROCESS
@@ -82,6 +90,12 @@ class MainActivity : ComponentActivity() {
     private var serverAvailableModes by mutableStateOf<Set<String>>(emptySet())
     private var voiceBackgrounds by mutableStateOf<List<VoiceBackground>>(emptyList())
     private var selectedBackgroundIndex by mutableIntStateOf(0)
+    private var showVibeSheet by mutableStateOf(false)
+    private var showRecordFormatSheet by mutableStateOf(false)
+    private var showVideoRecorder by mutableStateOf(false)
+    private var liveFormat by mutableStateOf(RecordFormat.AUDIO)
+
+    enum class RecordFormat { AUDIO, VIDEO }
     private var bgMixVolume by mutableStateOf(0.15f)
     private var lastAdaptiveProfile by mutableStateOf<AdaptiveAudioAnalyzer.Profile?>(null)
     private var adaptiveAnalysisLoading by mutableStateOf(false)
@@ -98,6 +112,9 @@ class MainActivity : ComponentActivity() {
     private var fastLibInputLabel by mutableStateOf<String?>(null)
     private var fastLibIsCleaning by mutableStateOf(false)
     private var fastLibOutputFileName by mutableStateOf<String?>(null)
+    private var fastLibStage by mutableStateOf<String?>(null) // uploading | processing | downloading
+    private var fastLibProgress by mutableIntStateOf(0)       // 0..100 during downloading
+    private val fastLibOutputs = mutableStateListOf<String>() // most-recent-first filenames
 
     // Store audio pairs for comparison (timestamp -> AudioPair)
     private var audioPairsList = mutableStateListOf<AudioPair>()
@@ -120,6 +137,7 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
+            if (rejectIfOversized(it, isVideo = false)) return@let
             fastLibInputUri = it
             fastLibInputIsVideo = false
             fastLibInputLabel = getFileName(it)
@@ -131,10 +149,44 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
+            if (rejectIfOversized(it, isVideo = true)) return@let
             fastLibInputUri = it
             fastLibInputIsVideo = true
             fastLibInputLabel = getFileName(it)
             fastLibOutputFileName = null
+        }
+    }
+
+    /**
+     * Returns true (and shows a toast) if the picked URI exceeds the FastLib upload cap.
+     * Cap mirrors server nginx `voice_upload` location: 50 MB (audio or video).
+     * Audio tier is soft-capped at 25 MB because most voice clips fit easily
+     * and bigger audio is usually a mis-pick.
+     */
+    private fun rejectIfOversized(uri: Uri, isVideo: Boolean): Boolean {
+        val size = uriContentSize(uri) ?: return false // unknown size — let server decide
+        val maxBytes = if (isVideo) FASTLIB_MAX_VIDEO_BYTES else FASTLIB_MAX_AUDIO_BYTES
+        return if (size > maxBytes) {
+            val limitMb = maxBytes / (1024 * 1024)
+            val gotMb = "%.1f".format(size / 1024.0 / 1024.0)
+            Toast.makeText(
+                this,
+                "File too large: ${gotMb} MB. Max ${limitMb} MB for " +
+                    (if (isVideo) "video" else "audio") + ".",
+                Toast.LENGTH_LONG
+            ).show()
+            true
+        } else false
+    }
+
+    private fun uriContentSize(uri: Uri): Long? {
+        return try {
+            contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)
+                ?.use { c ->
+                    if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
+                }
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -196,6 +248,7 @@ class MainActivity : ComponentActivity() {
         audioRecorder = AudioRecorder(this)
         voiceApi = VoiceCleaningApi()
         voiceApiPhase2 = VoiceApiPhase2Client()
+        freeMinutesLeft = loadFreeMinutes()
         refreshVoiceApiCapabilities()
 
         checkPermissions()
@@ -211,6 +264,7 @@ class MainActivity : ComponentActivity() {
                         isUploading = isUploading,
                         uploadProgress = uploadProgress,
                         showSuccess = showSuccess,
+                        onDismissSuccess = { showSuccess = false },
                         lastSaveInfo = lastSaveInfo,
                         showCleanButton = showCleanButton,
                         selectedFileName = selectedFileUri?.let { getFileName(it) },
@@ -228,7 +282,12 @@ class MainActivity : ComponentActivity() {
                             processingFlow = ProcessingFlow.values()[it]
                         },
                         onCleaningPresetChange = { cleaningPreset = it },
-                        onStartRecording = { startRecording() },
+                        // On Home, tapping Start Recording opens the audio/video chooser
+                        // sheet; the sheet then either calls startRecording() (audio)
+                        // or opens the CameraX video overlay.
+                        onStartRecording = {
+                            if (isRecording) stopRecording() else showRecordFormatSheet = true
+                        },
                         onStopRecording = { stopRecording() },
                         onUploadFile = { openUploadPicker() },
                         onVideoUpload = { openVideoPickerDirect() },
@@ -282,6 +341,13 @@ class MainActivity : ComponentActivity() {
                         currentlyPlaying = currentlyPlayingFile,
                         cleaningPreset = cleaningPreset,
                         modeAvailabilityNote = cloudModeAvailabilityNote(),
+                        isVideoMode = liveFormat == RecordFormat.VIDEO,
+                        onToggleFormat = { isVideo ->
+                            liveFormat = if (isVideo) RecordFormat.VIDEO else RecordFormat.AUDIO
+                        },
+                        onStartVideoRecording = {
+                            requestCameraThen { showVideoRecorder = true }
+                        },
                         onCleaningPresetChange = { cleaningPreset = it },
                         onStartRecording = { startRecording() },
                         onStopRecording = { stopRecording() },
@@ -317,7 +383,7 @@ class MainActivity : ComponentActivity() {
                         onTabSelected = { tab -> selectedTab = tab },
                         cleaningPreset = cleaningPreset,
                         freeMinutesLeft = freeMinutesLeft,
-                        freeQuotaMinutes = 8,
+                        freeQuotaMinutes = FREE_QUOTA_MINUTES,
                         completedCleans = getAudioPairs().size,
                         totalProcessedMinutes = totalProcessedMinutes(),
                         dayStreak = readProfileStreak(),
@@ -335,16 +401,21 @@ class MainActivity : ComponentActivity() {
                     )
                     4 -> FastLibTestScreen(
                         selectedTab = selectedTab,
+                        recordingsDir = recDir,
                         selectedFileLabel = fastLibInputLabel,
                         isVideoInput = fastLibInputIsVideo,
                         isCleaning = fastLibIsCleaning,
-                        outputFileName = fastLibOutputFileName,
+                        stage = fastLibStage,
+                        progressPct = fastLibProgress,
+                        outputs = fastLibOutputs.toList(),
+                        maxAudioMb = (FASTLIB_MAX_AUDIO_BYTES / 1024 / 1024).toInt(),
+                        maxVideoMb = (FASTLIB_MAX_VIDEO_BYTES / 1024 / 1024).toInt(),
                         onUploadAudio = { openFastAudioPicker() },
                         onUploadVideo = { openFastVideoPicker() },
                         onStartCleaning = { startFastLibTestCleaning() },
-                        onPlayOutput = { fastLibOutputFileName?.let { playAudioFile(it) } },
-                        onShareOutput = { fastLibOutputFileName?.let { shareFile(it) } },
-                        onSaveOutput = { fastLibOutputFileName?.let { downloadFile(it) } },
+                        onPlayOutput = { name -> playAudioFile(name) },
+                        onShareOutput = { name -> shareFile(name) },
+                        onSaveOutput = { name -> downloadFile(name) },
                         onTabSelected = { tab -> selectedTab = tab }
                     )
                     else -> HomeScreen(
@@ -354,6 +425,7 @@ class MainActivity : ComponentActivity() {
                         isUploading = isUploading,
                         uploadProgress = uploadProgress,
                         showSuccess = showSuccess,
+                        onDismissSuccess = { showSuccess = false },
                         lastSaveInfo = lastSaveInfo,
                         showCleanButton = showCleanButton,
                         selectedFileName = selectedFileUri?.let { getFileName(it) },
@@ -418,6 +490,42 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+                // Record format chooser (Audio vs Video)
+                if (showRecordFormatSheet) {
+                    com.bolsaaf.ui.screens.RecordFormatSheet(
+                        onDismiss = { showRecordFormatSheet = false },
+                        onPickAudio = {
+                            showRecordFormatSheet = false
+                            if (isRecording) stopRecording() else startRecording()
+                        },
+                        onPickVideo = {
+                            showRecordFormatSheet = false
+                            requestCameraThen { showVideoRecorder = true }
+                        }
+                    )
+                }
+
+                // Full-screen video recorder (CameraX)
+                if (showVideoRecorder) {
+                    androidx.compose.ui.window.Dialog(
+                        onDismissRequest = { showVideoRecorder = false },
+                        properties = androidx.compose.ui.window.DialogProperties(
+                            usePlatformDefaultWidth = false,
+                            dismissOnBackPress = true,
+                            dismissOnClickOutside = false
+                        )
+                    ) {
+                        com.bolsaaf.ui.components.VideoRecordOverlay(
+                            outputDir = recDir,
+                            onRecorded = { file ->
+                                showVideoRecorder = false
+                                onVideoRecordingFinished(file)
+                            },
+                            onCancel = { showVideoRecorder = false }
+                        )
+                    }
+                }
+
                 // Settings Dialog
                 if (showSettingsDialog) {
                     SettingsDialog(
@@ -428,11 +536,11 @@ class MainActivity : ComponentActivity() {
                             showSettingsDialog = false
                         },
                         onPrivacyPolicy = {
-                            Toast.makeText(this@MainActivity, "Privacy Policy coming soon", Toast.LENGTH_SHORT).show()
+                            openExternalUrl("https://shadowselfwork.com/voice/privacy")
                             showSettingsDialog = false
                         },
                         onTermsOfService = {
-                            Toast.makeText(this@MainActivity, "Terms of Service coming soon", Toast.LENGTH_SHORT).show()
+                            openExternalUrl("https://shadowselfwork.com/voice/terms")
                             showSettingsDialog = false
                         }
                     )
@@ -483,6 +591,58 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Called when CameraX finishes writing a recorded MP4 to disk.
+     * Adds it to the Recent Cleans list as a video item, so the user can
+     * play it back, share, or (next release) run video/process on it.
+     */
+    private fun onVideoRecordingFinished(file: File) {
+        val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val original = file // same as "cleaned" for raw recording
+        val pair = AudioPair(
+            timestamp = ts,
+            time = getCurrentTimeFormatted(),
+            originalFile = file.name,
+            cleanedFile = file.name,
+            isRecording = true,
+            durationSec = mediaDurationSec(file)
+        )
+        audioPairsList.removeAll { it.timestamp == ts }
+        audioPairsList.add(0, pair)
+        while (audioPairsList.size > 10) audioPairsList.removeAt(audioPairsList.lastIndex)
+        lastSaveInfo = SaveInfo(file.name, pair.durationSec, ts)
+        showSuccess = true
+        Toast.makeText(this, "Video saved: ${file.name}", Toast.LENGTH_SHORT).show()
+    }
+
+    /** Request CAMERA (+ RECORD_AUDIO if missing) before opening the video recorder. */
+    private fun requestCameraThen(onGranted: () -> Unit) {
+        val needed = listOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+            .filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
+        if (needed.isEmpty()) {
+            onGranted()
+            return
+        }
+        pendingCameraOnGranted = onGranted
+        cameraPermissionLauncher.launch(needed.toTypedArray())
+    }
+
+    private var pendingCameraOnGranted: (() -> Unit)? = null
+    private val cameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val cameraOk = result[Manifest.permission.CAMERA] ?: (
+            ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+        if (cameraOk) {
+            pendingCameraOnGranted?.invoke()
+        } else {
+            Toast.makeText(this, "Camera permission is required to record video.", Toast.LENGTH_LONG).show()
+        }
+        pendingCameraOnGranted = null
+    }
+
     private fun handleLogin(email: String, password: String) {
         // For now, just simulate login - in production, this would call an API
         Thread {
@@ -531,12 +691,15 @@ class MainActivity : ComponentActivity() {
                 }
                 runOnUiThread {
                     fastLibIsCleaning = true
+                    fastLibStage = "uploading"
+                    fastLibProgress = 0
                     if (fastLibInputIsVideo && !treatAsVideo) {
                         Toast.makeText(this, "No video track detected. Running audio clean.", Toast.LENGTH_SHORT).show()
                     }
                 }
-                if (treatAsVideo) {
+                val outputUrl: String = if (treatAsVideo) {
                     val accepted = voiceApiPhase2.fastLibVideoProcess(inputFile)
+                    runOnUiThread { fastLibStage = "processing" }
                     var status = voiceApiPhase2.getStatus(accepted.jobId)
                     var attempts = 0
                     while (status.status !in setOf("completed", "failed") && attempts < 120) {
@@ -547,11 +710,11 @@ class MainActivity : ComponentActivity() {
                     if (status.status != "completed") {
                         throw IllegalStateException(status.errorMessage ?: "Video cleaning failed")
                     }
-                    val outputUrl = status.outputVideoUrl ?: status.outputAudioUrl ?: status.cleanedUrl
+                    status.outputVideoUrl ?: status.outputAudioUrl ?: status.cleanedUrl
                         ?: throw IllegalStateException("No output url for video cleaning")
-                    downloadFromUrl(outputUrl, outFile)
                 } else {
                     val accepted = voiceApiPhase2.fastLibClean(inputFile)
+                    runOnUiThread { fastLibStage = "processing" }
                     var status = voiceApiPhase2.getStatus(accepted.jobId)
                     var attempts = 0
                     while (status.status !in setOf("completed", "failed") && attempts < 120) {
@@ -562,15 +725,27 @@ class MainActivity : ComponentActivity() {
                     if (status.status != "completed") {
                         throw IllegalStateException(status.errorMessage ?: "Audio cleaning failed")
                     }
-                    val outputUrl = status.outputAudioUrl ?: status.cleanedUrl
+                    status.outputAudioUrl ?: status.cleanedUrl
                         ?: throw IllegalStateException("No output url for audio cleaning")
-                    downloadFromUrl(outputUrl, outFile)
+                }
+                runOnUiThread {
+                    fastLibStage = "downloading"
+                    fastLibProgress = 0
+                }
+                downloadFromUrl(outputUrl, outFile) { downloaded, total ->
+                    val pct = if (total > 0) ((downloaded * 100L) / total).toInt().coerceIn(0, 100) else 0
+                    runOnUiThread { fastLibProgress = pct }
                 }
 
                 val duration = mediaDurationSec(outFile)
                 runOnUiThread {
                     fastLibIsCleaning = false
+                    fastLibStage = null
+                    fastLibProgress = 0
                     fastLibOutputFileName = outFile.name
+                    // Newest first; keep last 20
+                    fastLibOutputs.add(0, outFile.name)
+                    while (fastLibOutputs.size > 20) fastLibOutputs.removeAt(fastLibOutputs.size - 1)
                     addAudioPair(timestamp, inputFile, outFile, isRecording = false)
                     Toast.makeText(this, "Fast Lib test clean done · ${"%.1f".format(duration)}s", Toast.LENGTH_LONG).show()
                 }
@@ -578,6 +753,8 @@ class MainActivity : ComponentActivity() {
                 Log.e(TAG, "startFastLibTestCleaning failed: ${e.message}", e)
                 runOnUiThread {
                     fastLibIsCleaning = false
+                    fastLibStage = null
+                    fastLibProgress = 0
                     Toast.makeText(this, "Fast Lib test failed: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -731,6 +908,15 @@ class MainActivity : ComponentActivity() {
 
         if (!file.exists()) {
             Toast.makeText(this, "File not found", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Video files: in-app MediaPlayer needs a Surface; route to external viewer.
+        if (fileName.endsWith(".mp4", ignoreCase = true) ||
+            fileName.endsWith(".mov", ignoreCase = true) ||
+            fileName.endsWith(".mkv", ignoreCase = true)
+        ) {
+            openVideoExternal(file)
             return
         }
 
@@ -928,13 +1114,15 @@ class MainActivity : ComponentActivity() {
     // Add audio pair (Original + Cleaned together)
     private fun addAudioPair(timestamp: String, originalFile: File, cleanedFile: File, isRecording: Boolean = true) {
         val time = getCurrentTimeFormatted()
+        val durSec = mediaDurationSec(cleanedFile)
+        consumeQuotaSeconds(durSec)
         val pair = AudioPair(
             timestamp = timestamp,
             time = time,
             originalFile = originalFile.name,
             cleanedFile = cleanedFile.name,
             isRecording = isRecording,
-            durationSec = mediaDurationSec(cleanedFile)
+            durationSec = durSec
         )
         // Remove any existing pair with same timestamp
         audioPairsList.removeAll { it.timestamp == timestamp }
@@ -962,6 +1150,51 @@ class MainActivity : ComponentActivity() {
 
     private fun readProfileStreak(): Int =
         getSharedPreferences("bolsaaf_streak", MODE_PRIVATE).getInt("count", 0)
+
+    private fun quotaPrefs() = getSharedPreferences("bolsaaf_quota", MODE_PRIVATE)
+
+    /** Load persisted free minutes. Resets to FREE_QUOTA_MINUTES at the start of each calendar month. */
+    private fun loadFreeMinutes(): Int {
+        val sp = quotaPrefs()
+        val thisPeriod = SimpleDateFormat("yyyyMM", Locale.US).format(Date())
+        val storedPeriod = sp.getString("period", null)
+        return if (storedPeriod != thisPeriod) {
+            sp.edit()
+                .putString("period", thisPeriod)
+                .putInt("left", FREE_QUOTA_MINUTES)
+                .apply()
+            FREE_QUOTA_MINUTES
+        } else {
+            sp.getInt("left", FREE_QUOTA_MINUTES).coerceIn(0, FREE_QUOTA_MINUTES)
+        }
+    }
+
+    /** Decrement by seconds-processed (rounded up to minute). Warn / alert when low. */
+    private fun consumeQuotaSeconds(seconds: Float) {
+        if (seconds <= 0f) return
+        val mins = kotlin.math.ceil(seconds / 60.0).toInt().coerceAtLeast(1)
+        val prev = freeMinutesLeft
+        val next = (prev - mins).coerceAtLeast(0)
+        freeMinutesLeft = next
+        quotaPrefs().edit().putInt("left", next).apply()
+        if (prev > QUOTA_WARN_THRESHOLD && next <= QUOTA_WARN_THRESHOLD && next > 0) {
+            runOnUiThread {
+                Toast.makeText(
+                    this,
+                    "$next min free left. Upgrade to Pro for unlimited.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        } else if (prev > 0 && next == 0) {
+            runOnUiThread {
+                Toast.makeText(
+                    this,
+                    "Free quota used up. Upgrade to Pro to continue.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
 
     private fun totalProcessedMinutes(): Float =
         (getAudioPairs().sumOf { it.durationSec.toDouble() } / 60.0).toFloat()
@@ -1191,6 +1424,7 @@ class MainActivity : ComponentActivity() {
                         preferred ?: throw IllegalStateException("No Reel V2 output url in completed job")
                     }
                     else -> {
+                        runOnUiThread { phase2StageName = "processing" }
                         var status = voiceApiPhase2.getStatus(accepted.jobId)
                         var attempts = 0
                         val maxAttempts = if (flowSnapshot == ProcessingFlow.VIDEO_PROCESS) 120 else 80
@@ -1209,7 +1443,16 @@ class MainActivity : ComponentActivity() {
                         } ?: throw IllegalStateException("No output url in completed job")
                     }
                 }
-                downloadFromUrl(outputUrl, outFile)
+                runOnUiThread {
+                    phase2StageName = "downloading"
+                    phase2OverallProgress = 0
+                }
+                downloadFromUrl(outputUrl, outFile) { downloaded, total ->
+                    val pct = if (total > 0) {
+                        ((downloaded * 100L) / total).toInt().coerceIn(0, 100)
+                    } else 0
+                    runOnUiThread { phase2OverallProgress = pct }
+                }
                 val dSec = mediaDurationSec(outFile)
                 runOnUiThread {
                     isCleaning = false
@@ -1248,17 +1491,37 @@ class MainActivity : ComponentActivity() {
         }.start()
     }
 
-    private fun downloadFromUrl(url: String, outputFile: File) {
+    private fun downloadFromUrl(
+        url: String,
+        outputFile: File,
+        onProgress: ((downloaded: Long, total: Long) -> Unit)? = null
+    ) {
         val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
         conn.requestMethod = "GET"
         conn.connectTimeout = 30000
         conn.readTimeout = 120000
         val code = conn.responseCode
         if (code !in 200..299) {
-            throw IllegalStateException("Download failed HTTP $code")
+            throw IllegalStateException(com.bolsaaf.audio.friendlyHttpError(code))
         }
+        val total = conn.contentLengthLong.coerceAtLeast(-1L)
         conn.inputStream.use { input ->
-            outputFile.outputStream().use { out -> input.copyTo(out) }
+            outputFile.outputStream().use { out ->
+                val buf = ByteArray(64 * 1024)
+                var downloaded = 0L
+                var lastReport = 0L
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                    downloaded += n
+                    if (onProgress != null && (downloaded - lastReport >= 128 * 1024 || downloaded == total)) {
+                        onProgress(downloaded, total)
+                        lastReport = downloaded
+                    }
+                }
+                onProgress?.invoke(downloaded, if (total > 0) total else downloaded)
+            }
         }
     }
 
@@ -1360,7 +1623,15 @@ class MainActivity : ComponentActivity() {
 
     private fun processingDialogTitle(): String =
         when (processingFlow) {
-            ProcessingFlow.VIDEO_PROCESS -> "Processing Video…"
+            ProcessingFlow.VIDEO_PROCESS -> {
+                val stage = phase2StageName
+                val pct = phase2OverallProgress.coerceIn(0, 100)
+                when (stage) {
+                    "downloading" -> if (pct > 0) "Downloading Video… $pct%" else "Downloading Video…"
+                    "processing" -> "Cleaning Audio Track…"
+                    else -> "Processing Video…"
+                }
+            }
             ProcessingFlow.REEL_MODE -> {
                 val pct = phase2OverallProgress.coerceIn(0, 100)
                 if (pct > 0) "Making Reel… $pct%" else "Making Reel…"
@@ -1370,7 +1641,13 @@ class MainActivity : ComponentActivity() {
 
     private fun processingDialogSubtitle(): String =
         when (processingFlow) {
-            ProcessingFlow.VIDEO_PROCESS -> "Server is cleaning the audio track and rebuilding the file."
+            ProcessingFlow.VIDEO_PROCESS -> {
+                when (phase2StageName) {
+                    "downloading" -> "Saving cleaned video to your phone…"
+                    "processing" -> "Server is cleaning the audio and rebuilding the file."
+                    else -> "Uploading and queuing your video on the server…"
+                }
+            }
             ProcessingFlow.REEL_MODE -> {
                 val stage = phase2StageName?.replace('_', ' ')?.replaceFirstChar { it.uppercase() }
                 if (stage.isNullOrBlank()) {
@@ -1876,6 +2153,36 @@ class MainActivity : ComponentActivity() {
             true
         } catch (_: Exception) {
             false
+        }
+    }
+
+    private fun openExternalUrl(url: String) {
+        try {
+            val intent = android.content.Intent(
+                android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse(url)
+            ).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
+            startActivity(intent)
+        } catch (_: Exception) {
+            Toast.makeText(this, "No browser available", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun openVideoExternal(file: File) {
+        try {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                this,
+                "${packageName}.fileprovider",
+                file
+            )
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "video/mp4")
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(android.content.Intent.createChooser(intent, "Open video with"))
+        } catch (e: Exception) {
+            Toast.makeText(this, "No video player found", Toast.LENGTH_SHORT).show()
         }
     }
 
