@@ -47,7 +47,7 @@ Single Gradle module `:app`. Android SDK **35** / min 24 / target 35, Kotlin + C
 ./gradlew :app:assembleRelease             # signed release (reads keystore from .env)
 ```
 
-Release signing reads `SIGNING_KEYSTORE`, `SIGNING_ALIAS`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD` from the repo-root `.env` (see `app/build.gradle.kts`). `.env` is checked in; do not commit real production secrets there.
+Release signing reads `SIGNING_KEYSTORE`, `SIGNING_ALIAS`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD` from the repo-root `.env` (see `app/build.gradle.kts`). `.env` is gitignored — never commit it.
 
 ### Python side (benchmarks / tuning)
 
