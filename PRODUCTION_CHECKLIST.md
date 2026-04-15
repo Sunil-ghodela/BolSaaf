@@ -41,6 +41,8 @@ Pre-flight list before promoting a build to **Play Store Production**. Work top 
 | ☐ | Privacy URL live | `curl -s -o /dev/null -w "%{http_code}\n" https://shadowselfwork.com/voice/privacy` | 200 |
 | ☐ | Terms URL live | `curl -s -o /dev/null -w "%{http_code}\n" https://shadowselfwork.com/voice/terms` | 200 |
 | ☐ | Bare `/privacy` + `/terms` still 200 | same | older AABs in the wild keep working |
+| ☐ | Auth endpoints up | `curl -s -o /dev/null -w "%{http_code}\n" https://shadowselfwork.com/voice/auth/password-reset/confirm/` | 200 (serves reset form) |
+| ☐ | Voice admin reachable | `curl -s -o /dev/null -w "%{http_code}\n" https://shadowselfwork.com/voice/admin/` | 302 (redirects to login) |
 | ☐ | nginx config has no fresh warnings | `ssh root@... 'nginx -t'` | "syntax is ok / test is successful" |
 | ☐ | `voice-gunicorn` socket up | `ssh root@... 'systemctl is-active voice-gunicorn.socket voice-gunicorn.service'` | both `active` |
 | ☐ | `fast-music-remover` container up | `ssh root@... 'docker ps --filter name=fast-music-remover --format "{{.Status}}"'` | `Up …` |

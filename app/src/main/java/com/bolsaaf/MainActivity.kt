@@ -22,6 +22,7 @@ import com.bolsaaf.ui.screens.HistoryScreen
 import com.bolsaaf.ui.screens.LiveScreen
 import com.bolsaaf.ui.screens.SaveInfo
 import com.bolsaaf.audio.AudioProcessor
+import com.bolsaaf.audio.AuthApi
 import com.bolsaaf.audio.CleaningPreset
 import com.bolsaaf.audio.AudioRecorder
 import com.bolsaaf.audio.VoiceApiPhase2Client
@@ -108,6 +109,8 @@ class MainActivity : ComponentActivity() {
     private var userEmail by mutableStateOf<String?>(null)
     private var userDisplayName by mutableStateOf("You")
     private var userHandle by mutableStateOf("@bolsaaf")
+    private var isProMember by mutableStateOf(false)
+    private val authApi = AuthApi()
     private var fastLibInputUri by mutableStateOf<Uri?>(null)
     private var fastLibInputIsVideo by mutableStateOf(false)
     private var fastLibInputLabel by mutableStateOf<String?>(null)
@@ -250,6 +253,7 @@ class MainActivity : ComponentActivity() {
         voiceApi = VoiceCleaningApi()
         voiceApiPhase2 = VoiceApiPhase2Client()
         freeMinutesLeft = loadFreeMinutes()
+        restoreAuthSession()
         refreshVoiceApiCapabilities()
 
         checkPermissions()
@@ -392,12 +396,14 @@ class MainActivity : ComponentActivity() {
                         userHandle = userHandle,
                         userEmail = userEmail,
                         isLoggedIn = isUserLoggedIn,
-                        showProMemberBadge = false,
+                        showProMemberBadge = isProMember,
                         onUpgrade = {
-                            Toast.makeText(this, "Upgrade flow coming soon", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, "Upgrade flow coming soon — ping support from Settings.", Toast.LENGTH_SHORT).show()
                         },
                         onOpenSettings = { showSettingsDialog() },
                         onLogin = { email, password -> handleLogin(email, password) },
+                        onRegister = { email, password, name -> handleRegister(email, password, name) },
+                        onPasswordReset = { email -> handlePasswordReset(email) },
                         onLogout = { handleLogout() }
                     )
                     4 -> FastLibTestScreen(
@@ -648,33 +654,116 @@ class MainActivity : ComponentActivity() {
         pendingCameraOnGranted = null
     }
 
-    private fun handleLogin(email: String, password: String) {
-        // For now, just simulate login - in production, this would call an API
+    // --- Auth session persistence ---
+
+    private fun authPrefs() = getSharedPreferences("bolsaaf_auth", MODE_PRIVATE)
+    private fun savedAuthToken(): String? = authPrefs().getString("token", null)
+
+    private fun persistAuthUser(token: String, user: AuthApi.AuthUser) {
+        authPrefs().edit()
+            .putString("token", token)
+            .putString("email", user.email)
+            .putString("display_name", user.displayName)
+            .putString("handle", user.handle)
+            .apply()
+        applyAuthUserToUi(user)
+    }
+
+    private fun applyAuthUserToUi(user: AuthApi.AuthUser) {
+        isUserLoggedIn = true
+        userEmail = user.email
+        userDisplayName = user.displayName.ifBlank { user.email.substringBefore("@") }
+        userHandle = user.handle.ifBlank { "@" + user.email.substringBefore("@").take(10) }
+        isProMember = user.isPro
+        // Server quota is the source of truth once signed in.
+        freeMinutesLeft = user.freeMinutesLeft
+        quotaPrefs().edit()
+            .putString("period", user.freePeriodYyyyMm ?: SimpleDateFormat("yyyyMM", Locale.US).format(Date()))
+            .putInt("left", user.freeMinutesLeft)
+            .apply()
+    }
+
+    private fun clearAuthSession() {
+        authPrefs().edit().clear().apply()
+        isUserLoggedIn = false
+        userEmail = null
+        userDisplayName = "You"
+        userHandle = "@bolsaaf"
+        isProMember = false
+    }
+
+    /** On app start, if we have a stored token, fetch /auth/me/ to refresh quota + pro status. */
+    private fun restoreAuthSession() {
+        val token = savedAuthToken() ?: return
         Thread {
             try {
-                // Simulate network call
-                Thread.sleep(500)
-                runOnUiThread {
-                    isUserLoggedIn = true
-                    userEmail = email
-                    userDisplayName = email.substringBefore("@").capitalize(Locale.getDefault())
-                    userHandle = "@" + email.substringBefore("@").take(10)
-                    Toast.makeText(this, "Welcome back!", Toast.LENGTH_SHORT).show()
+                val me = authApi.me(token)
+                runOnUiThread { applyAuthUserToUi(me) }
+            } catch (e: AuthApi.AuthException) {
+                if (e.status == 401 || e.status == 404) {
+                    runOnUiThread { clearAuthSession() }
                 }
+            } catch (_: Exception) {
+                // Network failure — keep the cached session silently; next interaction will retry.
+            }
+        }.start()
+    }
+
+    private fun handleLogin(email: String, password: String) {
+        Thread {
+            try {
+                val result = authApi.login(email.trim().lowercase(Locale.US), password)
+                runOnUiThread {
+                    persistAuthUser(result.token, result.user)
+                    Toast.makeText(this, "Welcome back, ${result.user.displayName}!", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: AuthApi.AuthException) {
+                runOnUiThread { Toast.makeText(this, e.message ?: "Login failed", Toast.LENGTH_SHORT).show() }
             } catch (e: Exception) {
+                runOnUiThread { Toast.makeText(this, "Network error — please try again.", Toast.LENGTH_SHORT).show() }
+            }
+        }.start()
+    }
+
+    private fun handleRegister(email: String, password: String, displayName: String?) {
+        Thread {
+            try {
+                val result = authApi.register(email.trim().lowercase(Locale.US), password, displayName?.trim())
                 runOnUiThread {
-                    Toast.makeText(this, "Login failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                    persistAuthUser(result.token, result.user)
+                    Toast.makeText(this, "Welcome to BolSaaf, ${result.user.displayName}!", Toast.LENGTH_SHORT).show()
                 }
+            } catch (e: AuthApi.AuthException) {
+                runOnUiThread { Toast.makeText(this, e.message ?: "Sign-up failed", Toast.LENGTH_SHORT).show() }
+            } catch (e: Exception) {
+                runOnUiThread { Toast.makeText(this, "Network error — please try again.", Toast.LENGTH_SHORT).show() }
+            }
+        }.start()
+    }
+
+    private fun handlePasswordReset(email: String) {
+        val normalized = email.trim().lowercase(Locale.US)
+        if (normalized.isBlank() || "@" !in normalized) {
+            Toast.makeText(this, "Enter a valid email first.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        Thread {
+            runCatching { authApi.requestPasswordReset(normalized) }
+            runOnUiThread {
+                Toast.makeText(
+                    this,
+                    "If an account exists for $normalized, a reset email is on its way.",
+                    Toast.LENGTH_LONG
+                ).show()
             }
         }.start()
     }
 
     private fun handleLogout() {
-        isUserLoggedIn = false
-        userEmail = null
-        userDisplayName = "You"
-        userHandle = "@bolsaaf"
-        Toast.makeText(this, "Logged out successfully", Toast.LENGTH_SHORT).show()
+        val token = savedAuthToken()
+        clearAuthSession()
+        Toast.makeText(this, "Signed out.", Toast.LENGTH_SHORT).show()
+        if (token != null) Thread { runCatching { authApi.logout(token) } }.start()
     }
 
     private fun startFastLibTestCleaning() {

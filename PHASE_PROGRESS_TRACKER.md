@@ -1,8 +1,54 @@
 # BolSaaf Phase Progress Tracker
 
-**Last Updated**: 2026-04-15 (release-ready: AAB signed, legal URLs hosted, brand theme unified)
+**Last Updated**: 2026-04-15 (evening — real auth backend + /voice/admin/ ops dashboard live)
 
-## ✅ COMPLETED (April 15)
+## ✅ COMPLETED (April 15 — evening: real auth + admin dashboard)
+
+### Backend — `/voice/auth/*` + `/voice/admin/`
+- `VoiceUser` model extended: `free_quota_minutes`, `free_period_yyyymm` (month-rollover), `pro_expires_at`, `password_reset_token` + `password_reset_expires`. Password hashing switched from raw SHA-256 to Django's PBKDF2 (`make_password`/`check_password`) — zero user migration needed (clean table).
+- New endpoints under `https://shadowselfwork.com/voice/auth/`:
+  - `POST /register/` — email + password + optional display_name → session token (30-day).
+  - `POST /login/` — rotates token on every call.
+  - `POST /logout/` — clears token.
+  - `GET  /me/` (alias for `/profile/`) — hydrates `{ is_pro, free_minutes_left, pro_expires_at, free_period_yyyymm }`.
+  - `POST /consume/` — `{ seconds }` → server-side quota decrement (rounds up to nearest minute; no-op for Pro users).
+  - `POST /password-reset/` — sends email link via existing SendGrid (2-hour token, 200 regardless to avoid enumeration).
+  - `GET  /password-reset/confirm/?token=…` — serves a minimal brand-styled HTML form for the user to set a new password.
+- All class-based views `@csrf_exempt` for JSON POSTs.
+- Backups: `*.bak.20260415_065623` next to every patched file.
+
+### `/voice/admin/` Django admin site
+- New `VoiceAdminSite` mounted at `/voice/admin/` in `config/urls.py` (before the `voice/` include). Serves only voice-related models: `VoiceUser`, `AudioFile`, `VoiceFeedback`, `ReelJob`, `ReelOutput`.
+- `VoiceUserAdmin` actions for ops: **Reset free quota to default (20 min / month)**, **Grant Pro for 1 month**, **Grant Pro for 1 year**, **Revoke Pro**. Selected rows are bulk-updated.
+- Login uses existing Django superuser (`ss.sunil9255@gmail.com`). Same `VoiceUserAdmin` also registered on the default `/admin/` site so either entry point works.
+
+### App — real auth wiring (replaces local stub)
+- New `audio/AuthApi.kt` client (register / login / logout / me / consume / password-reset). Token sent as `Authorization: Bearer …`. Friendly-message mapping for 400/401/403/409/429/5xx.
+- `MainActivity`:
+  - New `authPrefs()` + `savedAuthToken()` + `persistAuthUser()` + `clearAuthSession()`.
+  - `restoreAuthSession()` runs in `onCreate` — if a token is cached, hits `/auth/me/` and rehydrates `{ isProMember, freeMinutesLeft, email, displayName, handle }`.
+  - `handleLogin` + `handleRegister` + `handleLogout` + `handlePasswordReset` all real network calls. Server profile overrides local quota on sign-in.
+  - `isProMember` now flows to `ProfileScreen.showProMemberBadge` so the "Pro Member" pill + "CURRENT" chip in the Plan modal light up when server says so.
+- `ProfileScreen.LoginDialog` rewritten: toggles between **Sign in** and **Create account**, "Forgot password?" link on the sign-in variant, register path collects `display_name`. All submits call back up to `MainActivity`.
+
+### Where things live (April 15 evening deltas)
+- Auth client: `app/src/main/java/com/bolsaaf/audio/AuthApi.kt`.
+- MainActivity auth: `handleLogin` / `handleRegister` / `handleLogout` / `handlePasswordReset` + session persistence `authPrefs()` block.
+- Login dialog: `ui/screens/ProfileScreen.kt::LoginDialog`.
+- Backend auth logic: `/var/www/simplelms/backend/apps/voice/auth_views.py` (+ `models.py` VoiceUser extension).
+- Admin site: `/var/www/simplelms/backend/apps/voice/admin_site.py` (+ `apps/voice/admin.py` for the default `/admin/` registration).
+- URL routes: `apps/voice/urls.py` (new auth paths) + `config/urls.py` (voice admin mount).
+
+---
+
+## ✅ COMPLETED (April 15 — afternoon: English sweep + support button)
+- All Hinglish UI copy → English: "Studio jaisi awaaz" → "Studio-grade voice", "Audio dono" → "Audio", "1 tap mein reel ready" → "Reel ready in 1 tap".
+- Settings dialog gains a **Contact Support** row (mailto: → `ss.sunil9255@gmail.com`, subject auto-prefilled with app versionName). Helper `openSupportEmail()` + `SUPPORT_EMAIL` constant in `MainActivity`.
+- About toast bumped to v1.0.1; support email updated across `PRODUCTION_CHECKLIST.md` + tracker.
+
+---
+
+## ✅ COMPLETED (April 15 — morning: release-ready: AAB signed, legal URLs hosted, brand theme unified)
 
 ### Release artifact
 - Signed **AAB** at `app/build/outputs/bundle/release/app-release.aab` (17.0 MB, `bolsaaf-release.jks`).

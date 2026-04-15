@@ -60,13 +60,13 @@ fun ProfileScreen(
     onUpgrade: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onLogin: (String, String) -> Unit = { _, _ -> },
+    onRegister: (String, String, String?) -> Unit = { _, _, _ -> },
+    onPasswordReset: (String) -> Unit = {},
     onLogout: () -> Unit = {}
 ) {
     val scroll = rememberScrollState()
     var showLoginDialog by remember { mutableStateOf(false) }
     var showPlanDialog by remember { mutableStateOf(false) }
-    var emailInput by remember { mutableStateOf("") }
-    var passwordInput by remember { mutableStateOf("") }
 
     val renewalLabel = remember {
         val c = Calendar.getInstance()
@@ -444,20 +444,19 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Login Dialog
+            // Login / Register Dialog
             if (showLoginDialog) {
                 LoginDialog(
-                    email = emailInput,
-                    password = passwordInput,
-                    onEmailChange = { emailInput = it },
-                    onPasswordChange = { passwordInput = it },
                     onDismiss = { showLoginDialog = false },
-                    onLogin = {
-                        onLogin(emailInput, passwordInput)
+                    onLogin = { email, password ->
+                        onLogin(email, password)
                         showLoginDialog = false
-                        emailInput = ""
-                        passwordInput = ""
-                    }
+                    },
+                    onRegister = { email, password, name ->
+                        onRegister(email, password, name)
+                        showLoginDialog = false
+                    },
+                    onPasswordReset = { email -> onPasswordReset(email) }
                 )
             }
         }
@@ -486,13 +485,19 @@ fun ProfileScreen(
 
 @Composable
 fun LoginDialog(
-    email: String,
-    password: String,
-    onEmailChange: (String) -> Unit,
-    onPasswordChange: (String) -> Unit,
     onDismiss: () -> Unit,
-    onLogin: () -> Unit
+    onLogin: (String, String) -> Unit,
+    onRegister: (String, String, String?) -> Unit,
+    onPasswordReset: (String) -> Unit
 ) {
+    var isRegister by remember { mutableStateOf(false) }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var displayName by remember { mutableStateOf("") }
+
+    val canSubmit = email.isNotBlank() && password.length >= 6 &&
+        (!isRegister || displayName.isNotBlank())
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
@@ -503,22 +508,34 @@ fun LoginDialog(
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(
-                    text = "Login",
+                    text = if (isRegister) "Create your account" else "Sign in",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Sign in with your email",
+                    text = if (isRegister) "Email + password — that's it."
+                           else "Sign in with your BolSaaf account.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(20.dp))
 
+                if (isRegister) {
+                    OutlinedTextField(
+                        value = displayName,
+                        onValueChange = { displayName = it },
+                        label = { Text("Display name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
                 OutlinedTextField(
                     value = email,
-                    onValueChange = onEmailChange,
+                    onValueChange = { email = it },
                     label = { Text("Email") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -527,14 +544,26 @@ fun LoginDialog(
 
                 OutlinedTextField(
                     value = password,
-                    onValueChange = onPasswordChange,
-                    label = { Text("Password") },
+                    onValueChange = { password = it },
+                    label = { Text(if (isRegister) "Password (min 6 chars)" else "Password") },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                if (!isRegister) {
+                    TextButton(
+                        onClick = { onPasswordReset(email) },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text(
+                            text = "Forgot password?",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
                 Row(modifier = Modifier.fillMaxWidth()) {
                     TextButton(
@@ -545,12 +574,27 @@ fun LoginDialog(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
-                        onClick = onLogin,
+                        onClick = {
+                            if (isRegister) onRegister(email, password, displayName.ifBlank { null })
+                            else onLogin(email, password)
+                        },
                         modifier = Modifier.weight(1f),
-                        enabled = email.isNotBlank() && password.isNotBlank()
+                        enabled = canSubmit
                     ) {
-                        Text("Login")
+                        Text(if (isRegister) "Sign up" else "Sign in")
                     }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(
+                    onClick = { isRegister = !isRegister },
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text(
+                        text = if (isRegister) "Already have an account? Sign in"
+                               else "New to BolSaaf? Create an account",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         }
