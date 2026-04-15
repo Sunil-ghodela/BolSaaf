@@ -21,10 +21,63 @@ class AudioProcessor(private val context: Context) {
     /** Input gain / limiter before RNNoise (same for live + file clean). */
     var cleaningPreset: CleaningPreset = CleaningPreset.NORMAL
 
+    /**
+     * Populated after each [cleanAudioFile] run so callers (UI) can surface whether the
+     * quality guard detected over-suppression and what we did about it.
+     */
+    @Volatile
+    var lastQualityReport: ProcessingQualityGuard.Report? = null
+        private set
+
+    /** True when [cleanAudioFile] applied a dry-mix safety blend because the guard flagged over-suppression. */
+    @Volatile
+    var lastAppliedDryMix: Boolean = false
+        private set
+
+    data class GuardResult(
+        val finalBuffer: ShortArray,
+        val report: ProcessingQualityGuard.Report,
+        val appliedDryMix: Boolean,
+    )
+
     companion object {
         const val SAMPLE_RATE = 48000
         const val FRAME_SIZE = 480  // RNNoise frame size
         const val WAV_HEADER_BYTES = 44
+
+        /** 70/30 blend toward cleaned signal when the guard flags aggressive suppression. */
+        private const val DRY_MIX_CLEANED_WEIGHT = 0.7f
+        private const val DRY_MIX_ORIGINAL_WEIGHT = 0.3f
+
+        /**
+         * Pure function: run [ProcessingQualityGuard] on cleaned vs original, and if the guard
+         * fails due to heavy_rms_drop / peak_collapsed / output_very_quiet, blend the original
+         * back in at 30 % and re-report. Isolated here so it can be unit-tested without a Context.
+         */
+        fun runQualityGuard(original: ShortArray, cleaned: ShortArray): GuardResult {
+            val initialReport = ProcessingQualityGuard.compare(original, cleaned)
+            if (initialReport.pass) {
+                return GuardResult(cleaned, initialReport, appliedDryMix = false)
+            }
+            val triggers = initialReport.issues.any {
+                it == "heavy_rms_drop" || it == "peak_collapsed" || it == "output_very_quiet"
+            }
+            if (!triggers) {
+                return GuardResult(cleaned, initialReport, appliedDryMix = false)
+            }
+
+            val n = minOf(original.size, cleaned.size)
+            val blended = ShortArray(cleaned.size)
+            for (i in 0 until n) {
+                val mixed = cleaned[i] * DRY_MIX_CLEANED_WEIGHT + original[i] * DRY_MIX_ORIGINAL_WEIGHT
+                blended[i] = mixed.toInt()
+                    .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                    .toShort()
+            }
+            if (cleaned.size > n) cleaned.copyInto(blended, n, n, cleaned.size)
+            val blendedReport = ProcessingQualityGuard.compare(original, blended)
+            return GuardResult(blended, blendedReport, appliedDryMix = true)
+        }
     }
 
     fun initialize(): Boolean {
@@ -52,12 +105,20 @@ class AudioProcessor(private val context: Context) {
         return try {
             val pcmData = extractPcmData(inputUri)
             val cleanedData = processAudioBuffer(pcmData, progressCallback)
-            writeWavFile(cleanedData, outputFile, SAMPLE_RATE, 1)
+            val finalData = applyQualityGuard(pcmData, cleanedData)
+            writeWavFile(finalData, outputFile, SAMPLE_RATE, 1)
             true
         } catch (e: Exception) {
             e.printStackTrace()
             false
         }
+    }
+
+    private fun applyQualityGuard(original: ShortArray, cleaned: ShortArray): ShortArray {
+        val result = runQualityGuard(original, cleaned)
+        lastQualityReport = result.report
+        lastAppliedDryMix = result.appliedDryMix
+        return result.finalBuffer
     }
 
     /** Decode any supported audio URI and export as 48k mono WAV for cloud API. */
