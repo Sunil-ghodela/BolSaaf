@@ -13,6 +13,7 @@ import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
@@ -134,7 +135,7 @@ class MainActivity : ComponentActivity() {
     ) { uri: Uri? -> uri?.let { handlePickedMediaUri(it) } }
 
     private val pickVideoLauncher = registerForActivityResult(
-        ActivityResultContracts.GetContent()
+        ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? -> uri?.let { handlePickedMediaUri(it) } }
 
     private val pickFastAudioLauncher = registerForActivityResult(
@@ -150,7 +151,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val pickFastVideoLauncher = registerForActivityResult(
-        ActivityResultContracts.GetContent()
+        ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let {
             if (rejectIfOversized(it, isVideo = true)) return@let
@@ -205,7 +206,9 @@ class MainActivity : ComponentActivity() {
 
     private fun openUploadPicker() {
         when (processingFlow) {
-            ProcessingFlow.VIDEO_PROCESS -> pickVideoLauncher.launch("video/*")
+            ProcessingFlow.VIDEO_PROCESS -> pickVideoLauncher.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+            )
             else -> pickAudioLauncher.launch("audio/*")
         }
     }
@@ -220,7 +223,9 @@ class MainActivity : ComponentActivity() {
      */
     private fun openVideoPickerDirect() {
         processingFlow = ProcessingFlow.VIDEO_PROCESS
-        pickVideoLauncher.launch("video/*")
+        pickVideoLauncher.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+        )
     }
 
     private fun openFastAudioPicker() {
@@ -228,7 +233,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openFastVideoPicker() {
-        pickFastVideoLauncher.launch("video/*")
+        pickFastVideoLauncher.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+        )
     }
 
     private fun milderCloudMode(current: String, available: Set<String>): String? {
