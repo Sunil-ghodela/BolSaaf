@@ -13,14 +13,14 @@ val envProps = Properties().apply {
 
 android {
     namespace = "com.bolsaaf"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.bolsaaf"
         minSdk = 24
-        targetSdk = 34
-        versionCode = 3
-        versionName = "1.0.2"
+        targetSdk = 35
+        versionCode = 4
+        versionName = "1.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -31,6 +31,9 @@ android {
             cmake {
                 cppFlags += "-O3"
                 arguments += "-DANDROID_STL=c++_shared"
+                // 16 KB page size compatibility (Pixel 9+, newer arm64 devices).
+                // Required by Play Store starting November 2025 for new targets.
+                arguments += "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384"
             }
         }
     }
@@ -102,6 +105,9 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.4")
     implementation("androidx.camera:camera-video:1.3.4")
     implementation("androidx.camera:camera-view:1.3.4")
+    // CameraX exposes Guava's ListenableFuture in its public API; since AGP/SDK 35
+    // no longer pulls it transitively, bring in real Guava (android flavor).
+    implementation("com.google.guava:guava:33.0.0-android")
 
     // Google Mobile Ads (AdMob) — app registration only for now; no ad units placed yet.
     implementation("com.google.android.gms:play-services-ads:23.0.0")
