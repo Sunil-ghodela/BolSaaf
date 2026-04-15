@@ -9,7 +9,7 @@ object VibeUi {
     fun displayLabelForBackgroundId(id: String, serverLabel: String): String {
         val key = id.trim().lowercase(Locale.US)
         return when (key) {
-            "ocean" -> "🌊 Ganga Calm"
+            "ocean" -> "🌊 Ocean Calm"
             "cafe" -> "☕ Cafe Talk"
             "rain" -> "🌧️ Rain Focus"
             "forest" -> "🌲 Forest Peace"
@@ -28,7 +28,7 @@ object VibeUi {
         val name = when {
             profile.flags.contains("high_noise_near_zero") ||
                 profile.flags.contains("moderate_noise_near_zero") -> "Rain Focus"
-            profile.rmsDbfs < -42f -> "Ganga Calm"
+            profile.rmsDbfs < -42f -> "Ocean Calm"
             profile.flags.contains("loud_input") -> "Cafe Talk"
             else -> "Forest Peace"
         }

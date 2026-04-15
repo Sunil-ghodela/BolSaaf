@@ -210,10 +210,9 @@ fun LiveScreen(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Microphone icon - using alternative icons since Mic/MicNone not available
                     Icon(
-                        imageVector = if (isRecording) Icons.Default.Menu else Icons.Default.PlayArrow,
-                        contentDescription = if (isRecording) "Live mic" else "Idle",
+                        imageVector = if (isRecording) Icons.Filled.Mic else Icons.Filled.MicNone,
+                        contentDescription = if (isRecording) "Live mic" else "Idle mic",
                         modifier = Modifier.size(80.dp),
                         tint = if (isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
                     )
@@ -869,21 +868,20 @@ fun LiveRecordingCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                // Share
                 LiveActionButton(
-                    icon = Icons.Filled.PlayArrow,  // Using PlayArrow as share alternative
+                    icon = Icons.Filled.Share,
                     label = "Share",
                     onClick = onShare
                 )
-                
-                // Download
+
                 LiveActionButton(
-                    icon = Icons.Filled.Info,
+                    icon = Icons.Filled.Download,
                     label = "Save",
                     onClick = onDownload
                 )
+
                 LiveActionButton(
-                    icon = Icons.Default.Person,
+                    icon = Icons.Filled.ThumbUp,
                     label = "Feedback",
                     onClick = onFeedback
                 )
