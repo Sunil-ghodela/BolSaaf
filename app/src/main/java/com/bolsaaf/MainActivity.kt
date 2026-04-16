@@ -109,6 +109,8 @@ class MainActivity : ComponentActivity() {
     private var showSettingsDialog by mutableStateOf(false)
     private var isUserLoggedIn by mutableStateOf(false)
     private var userEmail by mutableStateOf<String?>(null)
+    /** Phase 3: shown when the user taps Share on a reel/cleaned file — resolves to IG / WhatsApp / YT / generic chooser. */
+    private var quickShareFileName by mutableStateOf<String?>(null)
     private var userDisplayName by mutableStateOf("You")
     private var userHandle by mutableStateOf("@bolsaaf")
     private var isProMember by mutableStateOf(false)
@@ -273,6 +275,17 @@ class MainActivity : ComponentActivity() {
         setContent {
             BolSaafTheme {
                 val recDir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "BolSaaf")
+
+                // Phase 3 quick share sheet — overlays whatever screen is currently active.
+                quickShareFileName?.let { name ->
+                    com.bolsaaf.ui.components.QuickShareSheet(
+                        fileName = name,
+                        onDismiss = { quickShareFileName = null },
+                        onShareToPackage = { file, pkg -> shareFileToPackage(file, pkg) },
+                        onShareGeneric = { file -> shareFileGeneric(file) },
+                    )
+                }
+
                 when (selectedTab) {
                     0 -> HomeScreen(
                         recordingsDir = recDir,
@@ -2321,21 +2334,59 @@ class MainActivity : ComponentActivity() {
     }
 
     // Share file
+    /**
+     * Primary share entrypoint — opens the Phase 3 quick share sheet
+     * (Instagram / WhatsApp / YouTube / More) on the main UI tree.
+     */
     private fun shareFile(fileName: String) {
         val outputDir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "BolSaaf")
-        val file = File(outputDir, fileName)
-        
-        if (!file.exists()) {
+        if (!File(outputDir, fileName).exists()) {
             Toast.makeText(this, "File not found", Toast.LENGTH_SHORT).show()
             return
         }
-        
+        quickShareFileName = fileName
+    }
+
+    /** Used by the generic chooser fall-through from [QuickShareSheet]. */
+    private fun shareFileGeneric(fileName: String) {
+        val intent = buildShareIntent(fileName) ?: return
+        startActivity(android.content.Intent.createChooser(intent, "Share"))
+    }
+
+    /**
+     * Direct-target share for IG / WhatsApp / YouTube. Falls back to the
+     * generic chooser if [targetPackage] can't actually handle the intent
+     * (e.g. the user has the app but it no longer registers SEND for this
+     * mime type — YouTube is notoriously picky).
+     */
+    private fun shareFileToPackage(fileName: String, targetPackage: String) {
+        val intent = buildShareIntent(fileName) ?: return
+        intent.setPackage(targetPackage)
+        try {
+            startActivity(intent)
+        } catch (_: android.content.ActivityNotFoundException) {
+            Toast.makeText(
+                this,
+                "Can't open in that app — falling back to share menu",
+                Toast.LENGTH_SHORT
+            ).show()
+            intent.setPackage(null)
+            startActivity(android.content.Intent.createChooser(intent, "Share"))
+        }
+    }
+
+    private fun buildShareIntent(fileName: String): android.content.Intent? {
+        val outputDir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "BolSaaf")
+        val file = File(outputDir, fileName)
+        if (!file.exists()) {
+            Toast.makeText(this, "File not found", Toast.LENGTH_SHORT).show()
+            return null
+        }
         val uri = androidx.core.content.FileProvider.getUriForFile(
             this,
             "${packageName}.fileprovider",
             file
         )
-        
         val mime = when {
             fileName.endsWith(".mp4", true) -> "video/mp4"
             fileName.endsWith(".wav", true) -> "audio/wav"
@@ -2343,16 +2394,13 @@ class MainActivity : ComponentActivity() {
             fileName.endsWith(".m4a", true) -> "audio/mp4"
             else -> "*/*"
         }
-        val shareIntent = android.content.Intent().apply {
-            action = android.content.Intent.ACTION_SEND
+        return android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = mime
             putExtra(android.content.Intent.EXTRA_STREAM, uri)
             putExtra(android.content.Intent.EXTRA_SUBJECT, "BolSaaf output")
-            putExtra(android.content.Intent.EXTRA_TEXT, "Shared from BolSaaf")
+            putExtra(android.content.Intent.EXTRA_TEXT, "Cleaned with BolSaaf")
             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        
-        startActivity(android.content.Intent.createChooser(shareIntent, "Share"))
     }
     
     // Download file (copy to Downloads)

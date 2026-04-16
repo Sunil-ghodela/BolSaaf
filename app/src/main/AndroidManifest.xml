@@ -12,6 +12,13 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!-- Android 11+ (API 30+) requires explicit package visibility for the social share targets. -->
+    <queries>
+        <package android:name="com.instagram.android" />
+        <package android:name="com.whatsapp" />
+        <package android:name="com.google.android.youtube" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"

@@ -1,6 +1,48 @@
 # BolSaaf Phase Progress Tracker
 
-**Last Updated**: 2026-04-15 (evening — real auth backend + /voice/admin/ ops dashboard live)
+**Last Updated**: 2026-04-16 (evening — v1.1.0 AAB built, Phase 3 kickoff)
+
+## ✅ COMPLETED (April 16 — v1.1.0 polish: noise pipeline hardening + MD3 + icon + Phase 3 kickoff)
+
+### v1.1.0 post-launch polish (branch `chore/post-launch-task-list`, pushed)
+- **Audio pipeline hardening**
+  - `RNNoise.kt` — static-init `System.loadLibrary` wrapped in try/catch; `isLibraryLoaded()` + `loadError()` let callers distinguish fatal load failure from state-init failure.
+  - `ProcessingQualityGuard` **wired into the file-clean path** (`AudioProcessor.cleanAudioFile`). When the guard flags `heavy_rms_drop` / `peak_collapsed` / `output_very_quiet`, we dry-mix 0.7·cleaned + 0.3·original and re-check. Exposed `lastQualityReport` + `lastAppliedDryMix` for UI surfacing. Pure companion `runQualityGuard` + unit test `AudioProcessorQualityGuardTest`.
+- **Network hardening (`VoiceApiPhase2Client`)**
+  - `runNetwork { }` wrapper remaps `SocketTimeoutException` / `UnknownHostException` / `IOException` / `JSONException` to `VoiceCleaningException` with user-friendly messages.
+  - Added `MAX_AUDIO_UPLOAD_BYTES = 5 MB` constant + **pre-flight size check** in `processAudioFileWithPhase2Flow` — we now reject oversized files before hitting the server (was: server 413 surfaced as raw "HTTP 413").
+- **UI / UX pass**
+  - Launcher icon redesigned: centered white mic + sound waves + sparkle on a clean purple→blue gradient (old foreground was an off-center compass-like shape that looked distorted under adaptive-icon masking).
+  - 20+ hardcoded `Color(0x...)` calls across `LiveScreen`, `HomeScreen`, `ProfileScreen` replaced with `MaterialTheme.colorScheme` tokens.
+  - `HistoryScreen` filtered-empty state upgraded from a single line of grey text to a styled icon + hint card.
+  - `HomeScreen` gained a "No recordings yet" empty state with mic icon + CTA text when `audioPairs` is empty.
+  - `ComparisonCard` (Recent Cleans) rewritten as a clean list-row: 48dp play/pause toggle (icon flips on `isCleanedPlaying`), title + meta on one line, indented waveform, inline action row (Original / Share / Save / Feedback). Active state uses a solid 2dp primary border + 4dp elevation instead of a faded tint that vanished against the pink bg.
+  - `ComparisonPlayerScreen` play/pause button: hardcoded `Color.Black` → `MaterialTheme.colorScheme.onPrimary`.
+  - Start-Recording CTA: removed duplicate helper text that rendered both inside the button and below it. Replaced `CtaOrangeRedGradient` with a `primary→secondary` brand gradient (flips to `error` gradient while recording). Mic icon instead of PlayArrow for idle.
+  - Live recording card: stale comment claimed Mic icon wasn't available — replaced `Icons.Default.Menu`/`PlayArrow` with `Icons.Filled.Mic`/`MicNone`, fixed Share/Download/Feedback icons that were using wrong `PlayArrow`/`Info`/`Person` stand-ins.
+- **Docs**
+  - `POST_LAUNCH_TASKS.md` — punch list from the full codebase walk.
+  - `VISION_V2_VOICE_FIRST_REEL.md` — strategic plan to reposition BolSaaf from "voice cleaner" to "voice-first reel studio" for Indian youth. Phased roadmap (3 → 6), 8 "wow" mode ideas (Cricket Commentary, Confession, Study Vlog, Roast Battle, Mummy-Papa Safe, Bhakti, Desi Podcast, Meme Dubbing), GTM, risks.
+  - `CLAUDE.md` — fixed line 50 claim that `.env` was "checked in" (it's gitignored).
+
+### v1.1.0 release bundle
+- Version bumped to **1.1.0 (versionCode 5)** in `app/build.gradle.kts`.
+- Signed AAB at `app/build/outputs/bundle/release/app-release.aab` (21 MB) — waiting on v1.0.3 first-review approval before upload.
+
+### Phase 3 — "Voice-First Reel" kickoff (v1.2 target)
+Following `VISION_V2_VOICE_FIRST_REEL.md`. Shipping small quick wins first, then the big swings.
+
+- **Desi BG labels** — `VibeUi.displayLabelForBackgroundId` renamed for India-first flavour:
+  - `cafe` → **Chai Shop**, `rain` → **Monsoon Vibes**, `forest` → **Garden Morning**, `street` → **Delhi Street**. Server-side ids unchanged (backward compatible).
+- **Lab DEV tab hidden in release builds** — `BottomNavBar` now guards the 5th tab behind `BuildConfig.DEBUG`. Play builds will no longer show the internal dev harness.
+- **Quick Share to Instagram / WhatsApp / YouTube** — new `ui/components/QuickShareSheet.kt`, `ModalBottomSheet` with one-tap targets, package-availability detection (greys out targets the user hasn't installed), falls back to generic chooser. `AndroidManifest.xml` gained a `<queries>` block declaring the three packages for Android 11+ visibility. MainActivity got `shareFileToPackage(fileName, pkg)` + `shareFileGeneric(fileName)` + `buildShareIntent(fileName)` helpers.
+
+### Still pending before full Phase 3 MVP
+- Hindi + regional auto-captions on the cleaned track (ASR integration — ElevenLabs / Sarvam / Whisper).
+- "Best-take" picker — server-side scoring of 3–5 recordings.
+- Desi BG *audio files* on server (current IDs still map to generic cafe/rain/forest audio — renaming was labels only).
+- Animated waveform video generator.
+- Billing library integration (Play Billing) — `PlanDialog` upgrade flow still a stub toast.
 
 ## ✅ COMPLETED (April 15 — evening: AdMob wired + real auth + admin dashboard + account deletion)
 
