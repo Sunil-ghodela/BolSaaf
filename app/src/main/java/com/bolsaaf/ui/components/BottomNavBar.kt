@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.bolsaaf.BuildConfig
 import com.bolsaaf.ui.theme.BackgroundCard
 import com.bolsaaf.ui.theme.NavUnselected
 import com.bolsaaf.ui.theme.SliderTrackStrong
@@ -104,14 +105,16 @@ fun BottomNavBar(
                 isSelected = selectedTab == 3,
                 onClick = { onTabSelected(3) }
             )
-            NavItem(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Default.Build,
-                label = "Lab",
-                badge = "DEV",
-                isSelected = selectedTab == 4,
-                onClick = { onTabSelected(4) }
-            )
+            if (BuildConfig.DEBUG) {
+                NavItem(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Build,
+                    label = "Lab",
+                    badge = "DEV",
+                    isSelected = selectedTab == 4,
+                    onClick = { onTabSelected(4) }
+                )
+            }
         }
     }
 }
