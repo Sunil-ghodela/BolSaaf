@@ -16,12 +16,16 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -32,6 +36,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -974,52 +979,60 @@ fun HeroCleanPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(18.dp))
-                    .background(CtaOrangeRedGradient)
+                    .background(
+                        if (isRecording) {
+                            Brush.horizontalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.error,
+                                    MaterialTheme.colorScheme.error.copy(alpha = 0.85f)
+                                )
+                            )
+                        } else {
+                            Brush.horizontalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.secondary
+                                )
+                            )
+                        }
+                    )
                     .clickable { onCleanTap() }
                     .padding(vertical = 14.dp, horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (isRecording) Icons.Filled.Close else Icons.Filled.PlayArrow,
+                    imageVector = if (isRecording) Icons.Filled.Close else Icons.Filled.Mic,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(28.dp)
                 )
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = if (isRecording) "Stop Recording" else "Start Recording",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onPrimary
                     )
                     Text(
                         text = if (isRecording) "Your voice is being captured" else helperText,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.92f)
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
                     )
                 }
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White.copy(alpha = 0.22f)
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.22f)
                 ) {
                     Text(
                         text = "LIVE",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onPrimary
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = helperText,
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary
-            )
         }
     }
 }
@@ -1260,177 +1273,123 @@ fun ComparisonCard(
         pair.cleanedFile.endsWith(".mov", ignoreCase = true) ||
         pair.cleanedFile.endsWith(".mkv", ignoreCase = true)
 
-    // Animation states
-    var isVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { isVisible = true }
-
-    val scale by animateFloatAsState(
-        targetValue = if (isVisible) 1f else 0.95f,
-        animationSpec = tween(400, easing = EaseOutCubic),
-        label = "scale"
-    )
-    val alpha by animateFloatAsState(
-        targetValue = if (isVisible) 1f else 0f,
-        animationSpec = tween(400, easing = EaseOutCubic),
-        label = "alpha"
-    )
-
-    val accent = when {
-        isVideo -> AccentCyan
-        pair.isRecording -> AccentPurple
-        else -> ThemeBlue
-    }
-    val accentGradient = Brush.linearGradient(
-        colors = when {
-            isVideo -> listOf(ThemeBlue, AccentCyan)
-            pair.isRecording -> listOf(ThemeRedLight, ThemeRed)
-            else -> listOf(ThemeBlue, ThemeBlueLight)
-        }
-    )
     val typeLabel = when {
         isVideo -> "VIDEO"
         pair.isRecording -> "LIVE"
         else -> "AUDIO"
     }
-    val anyPlaying = isOriginalPlaying || isCleanedPlaying
-    val playPulse by rememberInfiniteTransition(label = "playPulse").animateFloat(
-        initialValue = 0.85f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(700, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "playPulseScale"
-    )
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp, horizontal = 4.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                this.alpha = alpha
-            },
-        colors = CardDefaults.cardColors(containerColor = BackgroundCard),
-        shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            .padding(vertical = 4.dp, horizontal = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isCleanedPlaying) 4.dp else 1.dp
+        ),
         border = androidx.compose.foundation.BorderStroke(
-            width = 1.dp,
-            color = accent.copy(alpha = 0.18f)
+            width = if (isCleanedPlaying) 2.dp else 0.5.dp,
+            color = if (isCleanedPlaying) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+            }
         )
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Header: gradient strip with play button + meta
+            // Primary row: play button + title + meta + delete
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                accent.copy(alpha = 0.12f),
-                                accent.copy(alpha = 0.04f),
-                                Color.Transparent
-                            )
-                        )
-                    )
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .clickable { onPlayCleaned() }
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Big gradient play button
+                // Circular play / pause button
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
-                        .graphicsLayer {
-                            if (anyPlaying) {
-                                scaleX = playPulse
-                                scaleY = playPulse
-                            }
-                        }
-                        .background(accentGradient, CircleShape)
-                        .clickable { onPlayCleaned() },
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isCleanedPlaying) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.primaryContainer
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.PlayArrow,
-                        contentDescription = "Play",
-                        tint = Color.White,
-                        modifier = Modifier.size(30.dp)
+                        imageVector = if (isCleanedPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (isCleanedPlaying) "Pause" else "Play",
+                        tint = if (isCleanedPlaying) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
+
+                // Title + meta
                 Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isVideo) "Cleaned Video" else "Cleaned Audio",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = accent.copy(alpha = 0.18f)
-                        ) {
-                            Text(
-                                text = typeLabel,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = accent,
-                                fontSize = 10.sp,
-                                letterSpacing = 0.8.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = pair.time,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = TextSecondary
+                            text = typeLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = 10.sp,
+                            letterSpacing = 0.6.sp
+                        )
+                        Text(
+                            text = "  ·  ${pair.time}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         if (pair.durationSec > 0f) {
                             Text(
-                                text = " · ${String.format(Locale.US, "%.1fs", pair.durationSec)}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = TextSecondary
+                                text = "  ·  ${String.format(Locale.US, "%.1fs", pair.durationSec)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = if (isVideo) "Cleaned Video" else "Cleaned Audio",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = pair.cleanedFile,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
                 }
+
+                // Delete
                 IconButton(
                     onClick = onRemove,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Close,
                         contentDescription = "Delete",
-                        tint = TextSecondary.copy(alpha = 0.7f),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
-            // Body: thumbnail (video) or waveform (audio).
+            // Video thumbnail (compact, only for video)
             if (isVideo) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 14.dp)
+                        .padding(horizontal = 12.dp)
                         .aspectRatio(16f / 9f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(accent.copy(alpha = 0.12f))
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                         .clickable { onPlayCleaned() },
                     contentAlignment = Alignment.Center
                 ) {
                     VideoThumbnail(file = cleanedPath)
-                    // Dark gradient scrim for play-button legibility
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -1445,80 +1404,106 @@ fun ComparisonCard(
                     )
                     Box(
                         modifier = Modifier
-                            .size(52.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
-                            .background(accent),
+                            .background(MaterialTheme.colorScheme.primary),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.PlayArrow,
-                            contentDescription = "Play video",
-                            tint = Color.White,
-                            modifier = Modifier.size(28.dp)
+                            imageVector = if (isCleanedPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = if (isCleanedPlaying) "Pause video" else "Play video",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(26.dp)
                         )
                     }
                 }
+                Spacer(modifier = Modifier.height(6.dp))
             } else {
-                Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)) {
+                // Compact waveform — shows always, subtly highlighted when playing
+                Box(
+                    modifier = Modifier.padding(
+                        start = 72.dp,
+                        end = 12.dp,
+                        bottom = 4.dp
+                    )
+                ) {
                     MiniWaveformStrip(cleanedPath, modifier = Modifier.fillMaxWidth())
-                }
-                if (pair.originalFile != pair.cleanedFile) {
-                    Row(
-                        modifier = Modifier
-                            .padding(horizontal = 10.dp)
-                            .clickable { onPlayOriginal() }
-                            .padding(horizontal = 6.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = if (isOriginalPlaying) Icons.Filled.Close else Icons.Filled.PlayArrow,
-                            contentDescription = null,
-                            tint = AccentGreen,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (isOriginalPlaying) "Stop original" else "Compare with original",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = AccentGreen
-                        )
-                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 12.dp),
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
 
-            // Footer: compact icon-only action row
+            // Inline action row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-                    .background(SurfaceStripe.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CompactActionIcon(
-                    icon = Icons.AutoMirrored.Filled.Send,
+                if (pair.originalFile != pair.cleanedFile && !isVideo) {
+                    InlineAction(
+                        icon = if (isOriginalPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        label = if (isOriginalPlaying) "Stop" else "Original",
+                        onClick = onPlayOriginal,
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                }
+                InlineAction(
+                    icon = Icons.Filled.Share,
                     label = "Share",
-                    tint = accent,
-                    onClick = onShare
+                    onClick = onShare,
+                    tint = MaterialTheme.colorScheme.primary
                 )
-                CompactActionIcon(
-                    icon = Icons.Filled.CheckCircle,
+                InlineAction(
+                    icon = Icons.Filled.Download,
                     label = "Save",
-                    tint = AccentGreen,
-                    onClick = onDownload
+                    onClick = onDownload,
+                    tint = MaterialTheme.colorScheme.primary
                 )
-                CompactActionIcon(
-                    icon = Icons.Filled.Info,
+                InlineAction(
+                    icon = Icons.Filled.ThumbUp,
                     label = "Feedback",
-                    tint = TextSecondary,
-                    onClick = onFeedback
+                    onClick = onFeedback,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun InlineAction(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    tint: Color,
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 12.sp
+        )
     }
 }
 
