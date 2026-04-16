@@ -6,28 +6,29 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
+    <!-- Brand gradient: deep purple → vivid blue -->
     <path android:pathData="M0,0 L108,0 L108,108 L0,108 Z">
         <aapt:attr name="android:fillColor">
             <gradient
                 android:type="linear"
                 android:startX="0" android:startY="0"
                 android:endX="108" android:endY="108">
-                <item android:color="#E94E5B" android:offset="0" />
-                <item android:color="#A24CB7" android:offset="0.5" />
-                <item android:color="#3D7DDB" android:offset="1" />
+                <item android:color="#7B2FF7" android:offset="0" />
+                <item android:color="#4C6EF5" android:offset="0.55" />
+                <item android:color="#2196F3" android:offset="1" />
             </gradient>
         </aapt:attr>
     </path>
 
+    <!-- Subtle radial glow top-left -->
     <path android:pathData="M0,0 L108,0 L108,108 L0,108 Z"
-        android:alpha="0.12">
+        android:alpha="0.10">
         <aapt:attr name="android:fillColor">
             <gradient
                 android:type="radial"
-                android:centerX="30" android:centerY="30"
-                android:gradientRadius="72">
+                android:centerX="32" android:centerY="32"
+                android:gradientRadius="70">
                 <item android:color="#FFFFFF" android:offset="0" />
-                <item android:color="#FFFFFF" android:offset="0.6" />
                 <item android:color="#00FFFFFF" android:offset="1" />
             </gradient>
         </aapt:attr>
