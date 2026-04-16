@@ -111,6 +111,10 @@ dependencies {
 
     // Google Mobile Ads (AdMob) — app registration only for now; no ad units placed yet.
     implementation("com.google.android.gms:play-services-ads:23.0.0")
+
+    // Google Play Billing — Pro subscription unlock.
+    // Server validation of purchase tokens goes via /voice/billing/validate/ (see BILLING_CONTRACT.md).
+    implementation("com.android.billingclient:billing-ktx:7.0.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

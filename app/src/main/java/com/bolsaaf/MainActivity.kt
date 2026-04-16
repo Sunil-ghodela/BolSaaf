@@ -114,6 +114,27 @@ class MainActivity : ComponentActivity() {
     private var userDisplayName by mutableStateOf("You")
     private var userHandle by mutableStateOf("@bolsaaf")
     private var isProMember by mutableStateOf(false)
+    private var isPurchaseInProgress by mutableStateOf(false)
+
+    private val billingManager by lazy {
+        com.bolsaaf.billing.BillingManager(
+            context = this,
+            onPurchaseSuccess = { productId, token ->
+                // Hand off to server validation — /voice/billing/validate/ sets pro_expires_at.
+                validatePurchaseWithServer(productId, token)
+            },
+            onPurchaseError = { code, message ->
+                runOnUiThread {
+                    isPurchaseInProgress = false
+                    Toast.makeText(
+                        this,
+                        "Purchase failed ($code): $message",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            },
+        )
+    }
     private val authApi = AuthApi()
     private var fastLibInputUri by mutableStateOf<Uri?>(null)
     private var fastLibInputIsVideo by mutableStateOf(false)
@@ -270,6 +291,12 @@ class MainActivity : ComponentActivity() {
             runCatching { com.google.android.gms.ads.MobileAds.initialize(this@MainActivity) {} }
         }.start()
 
+        // Connect to Play Billing + pick up any active Pro subscription that wasn't acknowledged
+        // from a prior session (e.g. user reinstalled, switched devices).
+        billingManager.connect {
+            billingManager.refreshActivePurchases()
+        }
+
         checkPermissions()
 
         setContent {
@@ -422,9 +449,7 @@ class MainActivity : ComponentActivity() {
                         userEmail = userEmail,
                         isLoggedIn = isUserLoggedIn,
                         showProMemberBadge = isProMember,
-                        onUpgrade = {
-                            Toast.makeText(this, "Upgrade flow coming soon — ping support from Settings.", Toast.LENGTH_SHORT).show()
-                        },
+                        onUpgrade = { startProPurchase() },
                         onOpenSettings = { showSettingsDialog() },
                         onLogin = { email, password -> handleLogin(email, password) },
                         onRegister = { email, password, name -> handleRegister(email, password, name) },
@@ -612,6 +637,52 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         audioRecorder.stopRecording()
         audioProcessor.destroy()
+        billingManager.disconnect()
+    }
+
+    /**
+     * Phase 3 — Pro subscription purchase entry point. Wired from [ProfileScreen.onUpgrade].
+     *
+     * Launches the Play purchase sheet using the cached ProductDetails from [BillingManager].
+     * If pricing hasn't loaded yet (billing setup still in flight), we trigger a connect and
+     * surface a toast. Real success flows through to [validatePurchaseWithServer] via the
+     * manager's onPurchaseSuccess callback.
+     */
+    private fun startProPurchase() {
+        if (isPurchaseInProgress) return
+        if (isProMember) {
+            Toast.makeText(this, "You're already Pro ✨", Toast.LENGTH_SHORT).show()
+            return
+        }
+        isPurchaseInProgress = true
+        billingManager.connect {
+            runOnUiThread {
+                val ok = billingManager.launchPurchaseFlow(this)
+                if (!ok) isPurchaseInProgress = false
+            }
+        }
+    }
+
+    /**
+     * Server handshake after a successful Play purchase. The Play purchase token alone does NOT
+     * grant Pro — the server validates it with Play Developer API and sets pro_expires_at.
+     *
+     * Endpoint contract: see BILLING_CONTRACT.md.
+     * Until the backend endpoint lands, this is a TODO stub that just flips local state so the
+     * user sees Pro in-app. That is fine for closed-testing (license testers) — DO NOT ship this
+     * code path to production without the server check, or anyone with a modified APK can set
+     * is_pro locally.
+     */
+    private fun validatePurchaseWithServer(productId: String, purchaseToken: String) {
+        android.util.Log.i(
+            "BolSaafBilling",
+            "TODO: POST /voice/billing/validate/ {product=$productId, token=${purchaseToken.take(12)}…}"
+        )
+        runOnUiThread {
+            isPurchaseInProgress = false
+            isProMember = true
+            Toast.makeText(this, "Welcome to Pro ✨", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun checkPermissions() {
