@@ -226,7 +226,7 @@ fun LiveScreen(
                             .offset(y = 20.dp)
                             .size(12.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFEF5350))
+                            .background(MaterialTheme.colorScheme.error)
                     )
                 }
             }
@@ -381,7 +381,7 @@ fun LiveScreen(
                             .size(100.dp)
                             .scale(pulseScale)
                             .alpha(0.3f)
-                            .background(Color(0xFFEF5350), CircleShape)
+                            .background(MaterialTheme.colorScheme.error, CircleShape)
                             .align(Alignment.Center)
                     )
                 }
@@ -544,7 +544,7 @@ fun StatsBar(
 
                 StatItem(
                     icon = Icons.Default.Info,
-                    iconColor = Color(0xFFFFA726),
+                    iconColor = MaterialTheme.colorScheme.tertiary,
                     label = "Latency",
                     value = "${latency}ms",
                     isActive = true
@@ -829,7 +829,7 @@ fun LiveRecordingCard(
                     Icon(
                         imageVector = Icons.Filled.Close,
                         contentDescription = "Remove",
-                        tint = Color(0xFFEF5350),
+                        tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -848,7 +848,7 @@ fun LiveRecordingCard(
                     label = "Original",
                     isPlaying = isOriginalPlaying,
                     onClick = onPlayOriginal,
-                    borderColor = Color(0xFFFF9800)
+                    borderColor = MaterialTheme.colorScheme.tertiary
                 )
                 
                 // Cleaned

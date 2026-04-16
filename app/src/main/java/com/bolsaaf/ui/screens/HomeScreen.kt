@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -387,6 +388,37 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
             
+            if (audioPairs.isEmpty()) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 28.dp, vertical = 40.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Mic,
+                            contentDescription = null,
+                            modifier = Modifier.size(56.dp),
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No recordings yet",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Record live or pick a file to clean your audio",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+
             items(audioPairs.take(3), key = { it.timestamp }) { pair ->
                 val index = audioPairs.indexOf(pair)
                 AnimatedVisibility(
@@ -778,17 +810,17 @@ fun GlassmorphicHeader(
                     .coerceIn(0f, 1f)
                 val isLow = freeMinutesLeft <= 3
                 val chipBg = if (isLow) {
-                    Color(0xFFFFE5E5)
+                    MaterialTheme.colorScheme.errorContainer
                 } else {
                     MaterialTheme.colorScheme.primaryContainer
                 }
                 val chipAccent = if (isLow) {
-                    Color(0xFFE34C52)
+                    MaterialTheme.colorScheme.error
                 } else {
                     MaterialTheme.colorScheme.primary
                 }
                 val chipText = if (isLow) {
-                    Color(0xFFB3261E)
+                    MaterialTheme.colorScheme.onErrorContainer
                 } else {
                     MaterialTheme.colorScheme.onPrimaryContainer
                 }
@@ -1005,12 +1037,12 @@ fun QuickActionCard(
 ) {
     val iconToUse = imageVector ?: icon ?: Icons.Default.Info
     val iconBg = when {
-        badge == "PRO" -> Color(0xFFFFF3E0)
+        badge == "PRO" -> MaterialTheme.colorScheme.tertiaryContainer
         isLoading -> SurfaceStripe
         else -> ThemeBlue.copy(alpha = 0.1f)
     }
     val iconTint = when {
-        badge == "PRO" -> Color(0xFFFF8F00)
+        badge == "PRO" -> MaterialTheme.colorScheme.tertiary
         isLoading -> ThemeBlue
         else -> ThemeRed
     }
@@ -1914,17 +1946,17 @@ fun AudioSideBox(
     ) {
         // Title badge
         Surface(
-            color = if (title.contains("Original")) 
-                Color(0xFFFF9800).copy(alpha = 0.2f) 
-            else 
-                AccentGreen.copy(alpha = 0.2f),
+            color = if (title.contains("Original"))
+                MaterialTheme.colorScheme.tertiaryContainer
+            else
+                MaterialTheme.colorScheme.primaryContainer,
             shape = RoundedCornerShape(8.dp)
         ) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Medium,
-                color = if (title.contains("Original")) Color(0xFFFF9800) else AccentGreen,
+                color = if (title.contains("Original")) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
@@ -1939,10 +1971,10 @@ fun AudioSideBox(
                 .size(48.dp)
                 .clip(CircleShape)
                 .background(
-                    if (isPlaying) 
-                        Color(0xFFEF5350)
-                    else 
-                        AccentGreen
+                    if (isPlaying)
+                        MaterialTheme.colorScheme.error
+                    else
+                        MaterialTheme.colorScheme.primary
                 )
                 .clickable { onPlay() },
             contentAlignment = Alignment.Center
@@ -2215,7 +2247,7 @@ fun UploadProgressDialog(
                 ) {
                     Text(
                         "Cancel Upload",
-                        color = Color(0xFFEF5350),
+                        color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -2276,7 +2308,7 @@ fun SuggestedPresetChipRow(
                         Text(
                             text = p.flags.joinToString(", "),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFFFB74D),
+                            color = MaterialTheme.colorScheme.tertiary,
                             maxLines = 2
                         )
                     }

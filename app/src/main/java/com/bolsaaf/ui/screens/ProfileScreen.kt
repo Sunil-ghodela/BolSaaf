@@ -177,7 +177,7 @@ fun ProfileScreen(
                                     .clip(RoundedCornerShape(20.dp))
                                     .background(
                                         brush = Brush.horizontalGradient(
-                                            listOf(Color(0xFFFFB74D), Color(0xFFFF7043))
+                                            listOf(MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.primary)
                                         )
                                     )
                                     .padding(horizontal = 12.dp, vertical = 6.dp)
@@ -221,7 +221,7 @@ fun ProfileScreen(
                         ProfileStatBlock(
                             value = dayStreak.toString(),
                             label = "Day streak",
-                            valueColor = Color(0xFFFF80AB)
+                            valueColor = MaterialTheme.colorScheme.tertiary
                         )
                     }
                 }
@@ -258,14 +258,14 @@ fun ProfileScreen(
                         )
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = Color(0x33FF9800)
+                            color = MaterialTheme.colorScheme.tertiaryContainer
                         ) {
                             Text(
                                 text = "Active",
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFFB74D)
+                                color = MaterialTheme.colorScheme.tertiary
                             )
                         }
                     }
@@ -323,7 +323,7 @@ fun ProfileScreen(
                                 .fillMaxSize()
                                 .background(
                                     brush = Brush.horizontalGradient(
-                                        listOf(Color(0xFFFF9800), Color(0xFFFFCA28))
+                                        listOf(MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.secondary)
                                     ),
                                     shape = RoundedCornerShape(14.dp)
                                 ),
@@ -748,7 +748,7 @@ fun PlanDialog(
                     price = "₹299",
                     priceSuffix = "/month",
                     isCurrent = isProMember,
-                    accentColor = Color(0xFFFF9800),
+                    accentColor = MaterialTheme.colorScheme.tertiary,
                     isHighlighted = true,
                     bullets = listOf(
                         "Unlimited voice cleaning",
@@ -778,7 +778,7 @@ fun PlanDialog(
                                 .fillMaxSize()
                                 .background(
                                     brush = Brush.horizontalGradient(
-                                        listOf(Color(0xFFFF9800), Color(0xFFFFCA28))
+                                        listOf(MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.secondary)
                                     ),
                                     shape = RoundedCornerShape(14.dp)
                                 ),
