@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
@@ -105,7 +106,11 @@ import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.bolsaaf.video.WaveformFrameRenderer
+import com.bolsaaf.video.WaveformVideoEncoder
+import com.bolsaaf.video.WaveformWindowSampler
 
 data class SaveInfo(
     val cleanedFileName: String,
@@ -178,6 +183,46 @@ fun HomeScreen(
 ) {
     var feedbackPair by remember { mutableStateOf<AudioPair?>(null) }
     var showVibeSheet by remember { mutableStateOf(false) }
+    var videoExportProgress by remember { mutableStateOf<Float?>(null) }
+    var videoExportError by remember { mutableStateOf<String?>(null) }
+    val exportScope = rememberCoroutineScope()
+
+    fun startWaveformExport(pair: AudioPair) {
+        if (videoExportProgress != null) return
+        val sourceFile = File(recordingsDir, pair.cleanedFile)
+        if (!sourceFile.exists() || sourceFile.length() < 44) {
+            videoExportError = "Source audio file not found"
+            return
+        }
+        videoExportProgress = 0f
+        videoExportError = null
+        exportScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                runCatching {
+                    val decoded = WaveformWindowSampler.decodeWav(sourceFile)
+                        ?: error("Only 16-bit PCM WAV is supported")
+                    val sampler = WaveformWindowSampler(decoded.samples, decoded.sampleRate)
+                    val renderer = WaveformFrameRenderer(
+                        width = WaveformVideoEncoder.DEFAULT_WIDTH,
+                        height = WaveformVideoEncoder.DEFAULT_HEIGHT,
+                        title = "BolSaaf",
+                        subtitle = "cleaned with AI"
+                    )
+                    val encoder = WaveformVideoEncoder(sampler, renderer)
+                    val outName = sourceFile.nameWithoutExtension + "_waveform.mp4"
+                    val outFile = File(recordingsDir, outName)
+                    encoder.encode(outFile) { frac ->
+                        videoExportProgress = frac
+                    }
+                    outName
+                }
+            }
+            videoExportProgress = null
+            result
+                .onSuccess { fileName -> onShareFile(fileName) }
+                .onFailure { err -> videoExportError = err.message ?: "Video export failed" }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -457,7 +502,8 @@ fun HomeScreen(
                         onRemove = { onRemovePair(pair.timestamp) },
                         onShare = { onShareFile(pair.cleanedFile) },
                         onDownload = { onDownloadFile(pair.cleanedFile) },
-                        onFeedback = { feedbackPair = pair }
+                        onFeedback = { feedbackPair = pair },
+                        onMakeVideo = { startWaveformExport(pair) }
                     )
                 }
             }
@@ -584,6 +630,68 @@ fun HomeScreen(
                     onUploadFile()
                 }
             )
+        }
+
+        videoExportProgress?.let { frac ->
+            Dialog(
+                onDismissRequest = {},
+                properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+            ) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Making your video…",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        LinearProgressIndicator(
+                            progress = { frac.coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "${(frac * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        videoExportError?.let { msg ->
+            Dialog(onDismissRequest = { videoExportError = null }) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Text(
+                            text = "Video export failed",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = msg,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TextButton(
+                            onClick = { videoExportError = null },
+                            modifier = Modifier.align(Alignment.End)
+                        ) { Text("OK") }
+                    }
+                }
+            }
         }
     }
 }
@@ -1264,7 +1372,8 @@ fun ComparisonCard(
     onRemove: () -> Unit = {},
     onShare: () -> Unit = {},
     onDownload: () -> Unit = {},
-    onFeedback: () -> Unit = {}
+    onFeedback: () -> Unit = {},
+    onMakeVideo: () -> Unit = {}
 ) {
     val isOriginalPlaying = currentlyPlaying == pair.originalFile
     val isCleanedPlaying = currentlyPlaying == pair.cleanedFile
@@ -1459,6 +1568,14 @@ fun ComparisonCard(
                     onClick = onShare,
                     tint = MaterialTheme.colorScheme.primary
                 )
+                if (!isVideo) {
+                    InlineAction(
+                        icon = Icons.Filled.Movie,
+                        label = "Video",
+                        onClick = onMakeVideo,
+                        tint = MaterialTheme.colorScheme.tertiary
+                    )
+                }
                 InlineAction(
                     icon = Icons.Filled.Download,
                     label = "Save",
