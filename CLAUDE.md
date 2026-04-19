@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > Last updated: 2026-04-15.
 
-**Where we are**: v1.0.3 (versionCode 4) **queued for Play Store first review** (India, full rollout). Package `com.bolsaaf` is registered, signing keystore verified, AAB at `app/build/outputs/bundle/release/app-release.aab`. Review window: 1–7 days. Don't bump versionCode or re-upload unless the user explicitly asks — the current submission is the canonical one.
+**Where we are**: Rebranded from BolSaaf → **ReelVoice** (package `com.reelvoice`). The previous `com.bolsaaf` Play Console submission is being withdrawn; fresh listing for `com.reelvoice` will be created. Signing keystore is reusable across applicationIds. Don't bump versionCode without explicit ask.
 
 **First thing to read** (gitignored — lives only on this machine): `BOLSAAF_PROJECT_INFO.md`. Single source of truth for every external identifier — package name, AdMob App ID, upload cert fingerprints, server IP, admin emails, every `/voice/` endpoint, Play Console listing values. If you need *any* ID or credential, it's there before you go hunting.
 
@@ -31,7 +31,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-BolSaaf is an Android voice-cleaner app (Kotlin + Jetpack Compose) that wraps Xiph **RNNoise** on-device via JNI/NDK and also talks to a server-side **Voice Cleaning API v2.2** (`https://shadowselfwork.com/voice/`) for heavier pipelines (Demucs extract, background mix, Reel mode, video processing). The app's current product direction is "reel creation engine", not just noise cleaning — see `VOICE_API_CONTRACT_PHASE2_PLUS.md` and `PHASE_PROGRESS_TRACKER.md` for the locked intent.
+ReelVoice (previously BolSaaf) is an Android voice-cleaner app (Kotlin + Jetpack Compose) that wraps Xiph **RNNoise** on-device via JNI/NDK and also talks to a server-side **Voice Cleaning API v2.2** (`https://shadowselfwork.com/voice/`) for heavier pipelines (Demucs extract, background mix, Reel mode, video processing). The app's current product direction is "reel creation engine", not just noise cleaning — see `VOICE_API_CONTRACT_PHASE2_PLUS.md` and `PHASE_PROGRESS_TRACKER.md` for the locked intent.
 
 ## Build, run, test
 
@@ -41,8 +41,8 @@ Single Gradle module `:app`. Android SDK **35** / min 24 / target 35, Kotlin + C
 ./gradlew :app:assembleDebug               # build debug APK
 ./gradlew :app:installDebug                # install to connected device
 ./gradlew :app:testDebugUnitTest           # JVM unit tests (what CI runs)
-./gradlew :app:testDebugUnitTest --tests "com.bolsaaf.audio.PcmResampleTest"   # single class
-./gradlew :app:testDebugUnitTest --tests "com.bolsaaf.audio.PcmResampleTest.someMethod"  # single test
+./gradlew :app:testDebugUnitTest --tests "com.reelvoice.audio.PcmResampleTest"   # single class
+./gradlew :app:testDebugUnitTest --tests "com.reelvoice.audio.PcmResampleTest.someMethod"  # single test
 ./gradlew :app:connectedDebugAndroidTest   # instrumented tests (needs device)
 ./gradlew :app:assembleRelease             # signed release (reads keystore from .env)
 ```
@@ -64,7 +64,7 @@ python3 scripts/benchmark_batch_analyze.py     # runs adaptive_audio_analyze ove
 
 ### On-device audio pipeline
 
-`app/src/main/cpp/` builds `librnnoise-lib.so` from upstream Xiph RNNoise sources (`rnnoise/src/*.c`) plus a JNI shim (`rnnoise_jni.cpp`). The Kotlin wrapper layer in `app/src/main/java/com/bolsaaf/audio/` is the heart of the on-device engine and is where most logic lives:
+`app/src/main/cpp/` builds `librnnoise-lib.so` from upstream Xiph RNNoise sources (`rnnoise/src/*.c`) plus a JNI shim (`rnnoise_jni.cpp`). The Kotlin wrapper layer in `app/src/main/java/com/reelvoice/audio/` is the heart of the on-device engine and is where most logic lives:
 
 - `RNNoise.kt` / `RNNoiseBridge.kt` — JNI surface. **RNNoise requires 480-sample frames at 48 kHz mono** — every caller must respect this.
 - `PcmFormat.kt`, `PcmResample.kt` — format + resampling helpers. Live mic path reads the actual `AudioRecord.sampleRate` (API 23+), accumulates PCM, resamples to 48 kHz mono, and feeds RNNoise in fixed 480-sample chunks. File-clean path **zero-pads tail frames** through RNNoise rather than bypassing them. Do not regress this — it was the Phase 1 hardening fix (see `PHASE_PROGRESS_TRACKER.md`).
@@ -72,7 +72,7 @@ python3 scripts/benchmark_batch_analyze.py     # runs adaptive_audio_analyze ove
 - `AdaptiveAudioAnalyzer.kt`, `CleaningPreset.kt`, `FeedbackAdaptiveMemory.kt`, `ProcessingQualityGuard.kt` — adaptive mode: analyze input (RMS/peak/zero-fraction/confidence) → pick preset → run post-processing guard (retry → dry-mix → loudness floor). This mirrors the server `adaptive` / `quality_guard` metadata documented in the API contract; keep the two in sync.
 - `WavPreview.kt` — WAV I/O.
 
-Unit tests for the above live under `app/src/test/java/com/bolsaaf/audio/` and are the fast feedback loop — prefer adding JVM tests here (no device needed) over instrumented tests when the code doesn't touch Android framework classes.
+Unit tests for the above live under `app/src/test/java/com/reelvoice/audio/` and are the fast feedback loop — prefer adding JVM tests here (no device needed) over instrumented tests when the code doesn't touch Android framework classes.
 
 ### Server API clients
 

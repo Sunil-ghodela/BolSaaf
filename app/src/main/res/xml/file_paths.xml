@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <external-files-path name="bolsaaf_audio" path="Music/BolSaaf/" />
-    <external-files-path name="bolsaaf_ext" path="." />
+    <external-files-path name="reelvoice_audio" path="Music/ReelVoice/" />
+    <external-files-path name="reelvoice_ext" path="." />
 </paths>

@@ -19,7 +19,7 @@
 
 extern "C"
 JNIEXPORT jlong JNICALL
-Java_com_bolsaaf_audio_RNNoise_create(JNIEnv *env, jobject thiz) {
+Java_com_reelvoice_audio_RNNoise_create(JNIEnv *env, jobject thiz) {
     DenoiseState *st = rnnoise_create(nullptr);
     if (st) {
         LOGI("RNNoise state created: %p", st);
@@ -31,7 +31,7 @@ Java_com_bolsaaf_audio_RNNoise_create(JNIEnv *env, jobject thiz) {
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_bolsaaf_audio_RNNoise_destroy(JNIEnv *env, jobject thiz, jlong ptr) {
+Java_com_reelvoice_audio_RNNoise_destroy(JNIEnv *env, jobject thiz, jlong ptr) {
     if (ptr != 0) {
         rnnoise_destroy((DenoiseState *) ptr);
         LOGI("RNNoise state destroyed: %p", (DenoiseState *) ptr);
@@ -165,7 +165,7 @@ static inline float biquad_df1(float x, float b0, float b1, float b2, float a1, 
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_bolsaaf_audio_RNNoise_resetPostState(JNIEnv *env, jobject thiz) {
+Java_com_reelvoice_audio_RNNoise_resetPostState(JNIEnv *env, jobject thiz) {
     hp_x1 = hp_x2 = hp_y1 = hp_y2 = 0.f;
     pk_x1 = pk_x2 = pk_y1 = pk_y2 = 0.f;
     hs_x1 = hs_x2 = hs_y1 = hs_y2 = 0.f;
@@ -177,7 +177,7 @@ Java_com_bolsaaf_audio_RNNoise_resetPostState(JNIEnv *env, jobject thiz) {
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_bolsaaf_audio_RNNoise_process(JNIEnv *env, jobject thiz, jlong ptr, jshortArray input) {
+Java_com_reelvoice_audio_RNNoise_process(JNIEnv *env, jobject thiz, jlong ptr, jshortArray input) {
     if (ptr == 0) {
         LOGE("Invalid RNNoise state pointer");
         return;
@@ -220,7 +220,7 @@ Java_com_bolsaaf_audio_RNNoise_process(JNIEnv *env, jobject thiz, jlong ptr, jsh
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_bolsaaf_audio_RNNoise_processStudio(JNIEnv *env, jobject thiz, jlong ptr, jshortArray input) {
+Java_com_reelvoice_audio_RNNoise_processStudio(JNIEnv *env, jobject thiz, jlong ptr, jshortArray input) {
     if (ptr == 0) {
         LOGE("Invalid RNNoise state pointer");
         return;

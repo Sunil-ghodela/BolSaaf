@@ -21,6 +21,6 @@
 #-renamesourcefileattribute SourceFile
 
 # RNNoise JNI
--keep class com.bolsaaf.audio.RNNoise {
+-keep class com.reelvoice.audio.RNNoise {
     native <methods>;
 }

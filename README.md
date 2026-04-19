@@ -1,4 +1,4 @@
-# BolSaaf - Voice Cleaner App
+# ReelVoice - Voice Cleaner App
 
 Studio jaisa sound, ghar baithhe - AI-powered noise removal for your voice recordings.
 
@@ -23,7 +23,7 @@ app/src/main/
 │   └── rnnoise/            # RNNoise library
 │       ├── include/
 │       └── src/
-├── java/com/bolsaaf/
+├── java/com/reelvoice/
 │   ├── MainActivity.kt     # Main UI
 │   └── audio/
 │       ├── RNNoiseBridge.kt    # JNI wrapper

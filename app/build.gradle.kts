@@ -12,11 +12,11 @@ val envProps = Properties().apply {
 }
 
 android {
-    namespace = "com.bolsaaf"
+    namespace = "com.reelvoice"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.bolsaaf"
+        applicationId = "com.reelvoice"
         minSdk = 24
         targetSdk = 35
         versionCode = 5
