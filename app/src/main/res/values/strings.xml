@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ReelVoice</string>
+
+    <!-- AdMob unit IDs. App ID is declared as meta-data in AndroidManifest. -->
+    <string name="admob_banner_ad_unit_id" translatable="false">ca-app-pub-8603652483152806/6031175626</string>
 </resources>
