@@ -22,6 +22,10 @@ object VibeUi {
             "forest" -> "🌿 Garden Morning"
             "street" -> "🛺 Delhi Street"
             "podcast" -> "🎙️ Podcast Room"
+            "bhakti" -> "🕉️ Bhakti"
+            "cricket" -> "🏏 Cricket Stadium"
+            "confession" -> "🤫 Confession"
+            "study" -> "📚 Study Lo-fi"
             else -> serverLabel.ifBlank { id }
         }
     }

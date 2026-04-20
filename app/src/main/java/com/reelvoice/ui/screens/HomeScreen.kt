@@ -13,9 +13,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ThumbUp
@@ -25,6 +29,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
@@ -95,10 +100,19 @@ import com.reelvoice.ui.theme.ThemeRedLight
 import com.reelvoice.ui.theme.TitleVideoAccent
 import com.reelvoice.audio.AdaptiveAudioAnalyzer
 import com.reelvoice.audio.CleaningPreset
+import com.reelvoice.audio.FillerRemover
+import com.reelvoice.audio.SilenceCutter
+import com.reelvoice.audio.VoiceStyle
+import com.reelvoice.audio.VoiceStyleProcessor
+import com.reelvoice.audio.WavIo
 import com.reelvoice.audio.WavPreview
 import com.reelvoice.ui.animation.MD3Motion
 import com.reelvoice.ui.animation.slideInFromStart
+import com.reelvoice.ui.components.BeforeAfterFormatPicker
 import com.reelvoice.ui.components.BottomNavBar
+import com.reelvoice.ui.components.ModePresetStrip
+import com.reelvoice.ui.components.ReelTemplateSheet
+import com.reelvoice.ui.components.VoiceStyleSheet
 import com.reelvoice.ui.animation.slideInFromBottom
 import com.reelvoice.ui.animation.slideOutToBottom
 import java.io.File
@@ -108,6 +122,12 @@ import kotlin.math.sin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.reelvoice.video.BeforeAfterImageGenerator
+import com.reelvoice.video.BeforeAfterVideoExport
+import com.reelvoice.video.FrameRenderer
+import com.reelvoice.video.PhotoLoader
+import com.reelvoice.video.PhotoWaveformFrameRenderer
+import com.reelvoice.video.ReelTemplate
 import com.reelvoice.video.WaveformFrameRenderer
 import com.reelvoice.video.WaveformVideoEncoder
 import com.reelvoice.video.WaveformWindowSampler
@@ -175,6 +195,7 @@ fun HomeScreen(
     adaptiveAnalysisLoading: Boolean = false,
     onApplyAdaptivePreset: () -> Unit = {},
     onProminentReelClick: () -> Unit = {},
+    onPickModePreset: (com.reelvoice.audio.ModePreset) -> Unit = {},
     reelVariantFiles: Map<String, String> = emptyMap(),
     onPlayReelVariant: (String) -> Unit = {},
     onShareReelVariant: (String) -> Unit = {},
@@ -185,9 +206,27 @@ fun HomeScreen(
     var showVibeSheet by remember { mutableStateOf(false) }
     var videoExportProgress by remember { mutableStateOf<Float?>(null) }
     var videoExportError by remember { mutableStateOf<String?>(null) }
+    var beforeAfterInFlight by remember { mutableStateOf(false) }
+    var beforeAfterError by remember { mutableStateOf<String?>(null) }
+    var beforeAfterProgress by remember { mutableStateOf<Float?>(null) }
+    var beforeAfterPickerPair by remember { mutableStateOf<AudioPair?>(null) }
+    var tightenInFlight by remember { mutableStateOf(false) }
+    var tightenMessage by remember { mutableStateOf<String?>(null) }
+    var waveformStylePickerPair by remember { mutableStateOf<AudioPair?>(null) }
+    var pendingPhotoWaveformPair by remember { mutableStateOf<AudioPair?>(null) }
+    var voiceStylePickerPair by remember { mutableStateOf<AudioPair?>(null) }
+    var voiceStyleInFlight by remember { mutableStateOf(false) }
+    var voiceStyleMessage by remember { mutableStateOf<String?>(null) }
+    var fillerInFlight by remember { mutableStateOf(false) }
+    var fillerMessage by remember { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     val exportScope = rememberCoroutineScope()
 
-    fun startWaveformExport(pair: AudioPair) {
+    fun startWaveformExport(
+        pair: AudioPair,
+        photoUri: android.net.Uri? = null,
+        template: ReelTemplate? = null,
+    ) {
         if (videoExportProgress != null) return
         val sourceFile = File(recordingsDir, pair.cleanedFile)
         if (!sourceFile.exists() || sourceFile.length() < 44) {
@@ -202,14 +241,36 @@ fun HomeScreen(
                     val decoded = WaveformWindowSampler.decodeWav(sourceFile)
                         ?: error("Only 16-bit PCM WAV is supported")
                     val sampler = WaveformWindowSampler(decoded.samples, decoded.sampleRate)
-                    val renderer = WaveformFrameRenderer(
-                        width = WaveformVideoEncoder.DEFAULT_WIDTH,
-                        height = WaveformVideoEncoder.DEFAULT_HEIGHT,
-                        title = "ReelVoice",
-                        subtitle = "cleaned with AI"
-                    )
+                    val renderer: FrameRenderer = if (photoUri != null) {
+                        val bitmap = PhotoLoader.loadScaled(
+                            contentResolver = context.contentResolver,
+                            uri = photoUri,
+                            targetWidth = WaveformVideoEncoder.DEFAULT_WIDTH,
+                            targetHeight = WaveformVideoEncoder.DEFAULT_HEIGHT
+                        )
+                        PhotoWaveformFrameRenderer(
+                            width = WaveformVideoEncoder.DEFAULT_WIDTH,
+                            height = WaveformVideoEncoder.DEFAULT_HEIGHT,
+                            background = bitmap,
+                            title = "ReelVoice",
+                            subtitle = "cleaned with AI"
+                        )
+                    } else {
+                        WaveformFrameRenderer(
+                            width = WaveformVideoEncoder.DEFAULT_WIDTH,
+                            height = WaveformVideoEncoder.DEFAULT_HEIGHT,
+                            title = template?.titleText ?: "ReelVoice",
+                            subtitle = template?.subtitleText ?: "cleaned with AI",
+                            template = template
+                        )
+                    }
                     val encoder = WaveformVideoEncoder(sampler, renderer)
-                    val outName = sourceFile.nameWithoutExtension + "_waveform.mp4"
+                    val suffix = when {
+                        photoUri != null -> "_photoreel"
+                        template != null -> "_${template.id}"
+                        else -> "_waveform"
+                    }
+                    val outName = sourceFile.nameWithoutExtension + suffix + ".mp4"
                     val outFile = File(recordingsDir, outName)
                     encoder.encode(outFile) { frac ->
                         videoExportProgress = frac
@@ -221,6 +282,177 @@ fun HomeScreen(
             result
                 .onSuccess { fileName -> onShareFile(fileName) }
                 .onFailure { err -> videoExportError = err.message ?: "Video export failed" }
+        }
+    }
+
+    fun startBeforeAfterImageExport(
+        pair: AudioPair,
+        aspect: BeforeAfterImageGenerator.Aspect
+    ) {
+        if (beforeAfterInFlight) return
+        val originalFile = File(recordingsDir, pair.originalFile)
+        val cleanedFile = File(recordingsDir, pair.cleanedFile)
+        if (!originalFile.exists() || !cleanedFile.exists()) {
+            beforeAfterError = "Source files not found"
+            return
+        }
+        beforeAfterInFlight = true
+        beforeAfterError = null
+        beforeAfterProgress = null
+        exportScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                runCatching {
+                    val suffix = when (aspect) {
+                        BeforeAfterImageGenerator.Aspect.PORTRAIT_9_16 -> "9x16"
+                        BeforeAfterImageGenerator.Aspect.SQUARE_1_1 -> "1x1"
+                    }
+                    val outName = "before_after_${pair.timestamp}_$suffix.png"
+                    val outFile = File(recordingsDir, outName)
+                    BeforeAfterImageGenerator.generate(
+                        originalWav = originalFile,
+                        cleanedWav = cleanedFile,
+                        output = outFile,
+                        aspect = aspect
+                    )
+                    outName
+                }
+            }
+            beforeAfterInFlight = false
+            result
+                .onSuccess { fileName -> onShareFile(fileName) }
+                .onFailure { err -> beforeAfterError = err.message ?: "Share card generation failed" }
+        }
+    }
+
+    fun startApplyVoiceStyle(pair: AudioPair, style: VoiceStyle) {
+        if (voiceStyleInFlight) return
+        if (style == VoiceStyle.NONE) {
+            voiceStyleMessage = "No style applied. Re-clean the clip to start fresh."
+            return
+        }
+        val cleanedFile = File(recordingsDir, pair.cleanedFile)
+        if (!cleanedFile.exists()) {
+            voiceStyleMessage = "Cleaned file not found"
+            return
+        }
+        voiceStyleInFlight = true
+        exportScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                runCatching {
+                    val decoded = WaveformWindowSampler.decodeWav(cleanedFile)
+                        ?: error("Only 16-bit PCM WAV is supported")
+                    val styled = VoiceStyleProcessor.process(decoded.samples, decoded.sampleRate, style)
+                    WavIo.writeWav(styled, cleanedFile, decoded.sampleRate)
+                    "${style.emoji} ${style.label} style applied"
+                }
+            }
+            voiceStyleInFlight = false
+            result
+                .onSuccess { msg -> voiceStyleMessage = msg }
+                .onFailure { err -> voiceStyleMessage = err.message ?: "Voice style failed" }
+        }
+    }
+
+    fun startTrimFillers(pair: AudioPair) {
+        if (fillerInFlight) return
+        val cleanedFile = File(recordingsDir, pair.cleanedFile)
+        if (!cleanedFile.exists()) {
+            fillerMessage = "Cleaned file not found"
+            return
+        }
+        fillerInFlight = true
+        exportScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                runCatching {
+                    val decoded = WaveformWindowSampler.decodeWav(cleanedFile)
+                        ?: error("Only 16-bit PCM WAV is supported")
+                    val report = FillerRemover.process(decoded.samples, decoded.sampleRate)
+                    if (report.fillersRemoved == 0) {
+                        "No clear fillers detected (beta)"
+                    } else {
+                        WavIo.writeWav(report.output, cleanedFile, decoded.sampleRate)
+                        "Trimmed ${report.fillersRemoved} filler${if (report.fillersRemoved == 1) "" else "s"} · saved ${"%.1f".format(report.secondsRemoved)}s"
+                    }
+                }
+            }
+            fillerInFlight = false
+            result
+                .onSuccess { msg -> fillerMessage = msg }
+                .onFailure { err -> fillerMessage = err.message ?: "Filler trim failed" }
+        }
+    }
+
+    fun startTightenSilences(pair: AudioPair) {
+        if (tightenInFlight) return
+        val cleanedFile = File(recordingsDir, pair.cleanedFile)
+        if (!cleanedFile.exists()) {
+            tightenMessage = "Cleaned file not found"
+            return
+        }
+        tightenInFlight = true
+        exportScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                runCatching {
+                    val decoded = WaveformWindowSampler.decodeWav(cleanedFile)
+                        ?: error("Only 16-bit PCM WAV is supported")
+                    val report = SilenceCutter.process(decoded.samples, decoded.sampleRate)
+                    if (report.samplesRemoved == 0) {
+                        "No long pauses found — nothing to trim"
+                    } else {
+                        WavIo.writeWav(report.output, cleanedFile, decoded.sampleRate)
+                        "Trimmed ${"%.1f".format(report.secondsRemoved)}s of pauses"
+                    }
+                }
+            }
+            tightenInFlight = false
+            result
+                .onSuccess { msg -> tightenMessage = msg }
+                .onFailure { err -> tightenMessage = err.message ?: "Tighten failed" }
+        }
+    }
+
+    fun startBeforeAfterVideoExport(pair: AudioPair) {
+        if (beforeAfterInFlight) return
+        val originalFile = File(recordingsDir, pair.originalFile)
+        val cleanedFile = File(recordingsDir, pair.cleanedFile)
+        if (!originalFile.exists() || !cleanedFile.exists()) {
+            beforeAfterError = "Source files not found"
+            return
+        }
+        beforeAfterInFlight = true
+        beforeAfterError = null
+        beforeAfterProgress = 0f
+        exportScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                runCatching {
+                    val outName = "before_after_${pair.timestamp}.mp4"
+                    val outFile = File(recordingsDir, outName)
+                    BeforeAfterVideoExport.generate(
+                        originalWav = originalFile,
+                        cleanedWav = cleanedFile,
+                        output = outFile
+                    ) { frac -> beforeAfterProgress = frac }
+                    outName
+                }
+            }
+            beforeAfterInFlight = false
+            beforeAfterProgress = null
+            result
+                .onSuccess { fileName -> onShareFile(fileName) }
+                .onFailure { err -> beforeAfterError = err.message ?: "Video export failed" }
+        }
+    }
+
+    // Declared after startWaveformExport so its lambda can call it without a
+    // forward reference — Kotlin requires local functions to be in scope at
+    // lambda-capture time.
+    val photoPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+    ) { uri: android.net.Uri? ->
+        val pair = pendingPhotoWaveformPair
+        pendingPhotoWaveformPair = null
+        if (pair != null && uri != null) {
+            startWaveformExport(pair, photoUri = uri)
         }
     }
 
@@ -327,6 +559,9 @@ fun HomeScreen(
                         onVideoUpload()
                     }
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
+                ModePresetStrip(onPick = onPickModePreset)
 
                 if (!modeAvailabilityNote.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -503,7 +738,11 @@ fun HomeScreen(
                         onShare = { onShareFile(pair.cleanedFile) },
                         onDownload = { onDownloadFile(pair.cleanedFile) },
                         onFeedback = { feedbackPair = pair },
-                        onMakeVideo = { startWaveformExport(pair) }
+                        onMakeVideo = { waveformStylePickerPair = pair },
+                        onShareBeforeAfter = { beforeAfterPickerPair = pair },
+                        onTightenSilences = { startTightenSilences(pair) },
+                        onApplyVoiceStyle = { voiceStylePickerPair = pair },
+                        onTrimFillers = { startTrimFillers(pair) }
                     )
                 }
             }
@@ -687,6 +926,279 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                         TextButton(
                             onClick = { videoExportError = null },
+                            modifier = Modifier.align(Alignment.End)
+                        ) { Text("OK") }
+                    }
+                }
+            }
+        }
+
+        if (beforeAfterInFlight) {
+            Dialog(
+                onDismissRequest = {},
+                properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+            ) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Cooking your Before / After…",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        val frac = beforeAfterProgress
+                        if (frac != null) {
+                            LinearProgressIndicator(
+                                progress = { frac.coerceIn(0f, 1f) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "${(frac * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            androidx.compose.material3.CircularProgressIndicator()
+                        }
+                    }
+                }
+            }
+        }
+
+        if (tightenInFlight) {
+            Dialog(
+                onDismissRequest = {},
+                properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+            ) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Tightening pauses…",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        androidx.compose.material3.CircularProgressIndicator()
+                    }
+                }
+            }
+        }
+
+        tightenMessage?.let { msg ->
+            Dialog(onDismissRequest = { tightenMessage = null }) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Text(
+                            text = "Silence cutter",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = msg,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TextButton(
+                            onClick = { tightenMessage = null },
+                            modifier = Modifier.align(Alignment.End)
+                        ) { Text("OK") }
+                    }
+                }
+            }
+        }
+
+        voiceStylePickerPair?.let { pair ->
+            VoiceStyleSheet(
+                onDismiss = { voiceStylePickerPair = null },
+                onPick = { style ->
+                    voiceStylePickerPair = null
+                    startApplyVoiceStyle(pair, style)
+                }
+            )
+        }
+
+        if (voiceStyleInFlight) {
+            Dialog(
+                onDismissRequest = {},
+                properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+            ) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Applying style…",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        androidx.compose.material3.CircularProgressIndicator()
+                    }
+                }
+            }
+        }
+
+        voiceStyleMessage?.let { msg ->
+            Dialog(onDismissRequest = { voiceStyleMessage = null }) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Text(
+                            text = "Voice style",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = msg,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TextButton(
+                            onClick = { voiceStyleMessage = null },
+                            modifier = Modifier.align(Alignment.End)
+                        ) { Text("OK") }
+                    }
+                }
+            }
+        }
+
+        if (fillerInFlight) {
+            Dialog(
+                onDismissRequest = {},
+                properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+            ) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Scanning for fillers…",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        androidx.compose.material3.CircularProgressIndicator()
+                    }
+                }
+            }
+        }
+
+        fillerMessage?.let { msg ->
+            Dialog(onDismissRequest = { fillerMessage = null }) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Text(
+                            text = "Filler trim (beta)",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = msg,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TextButton(
+                            onClick = { fillerMessage = null },
+                            modifier = Modifier.align(Alignment.End)
+                        ) { Text("OK") }
+                    }
+                }
+            }
+        }
+
+        waveformStylePickerPair?.let { pair ->
+            ReelTemplateSheet(
+                onDismiss = { waveformStylePickerPair = null },
+                onPickTemplate = { template ->
+                    waveformStylePickerPair = null
+                    startWaveformExport(pair, photoUri = null, template = template)
+                },
+                onPickPhoto = {
+                    waveformStylePickerPair = null
+                    pendingPhotoWaveformPair = pair
+                    photoPickerLauncher.launch(
+                        androidx.activity.result.PickVisualMediaRequest(
+                            androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                        )
+                    )
+                }
+            )
+        }
+
+        beforeAfterPickerPair?.let { pair ->
+            BeforeAfterFormatPicker(
+                onDismiss = { beforeAfterPickerPair = null },
+                onPickImage9x16 = {
+                    beforeAfterPickerPair = null
+                    startBeforeAfterImageExport(pair, BeforeAfterImageGenerator.Aspect.PORTRAIT_9_16)
+                },
+                onPickImage1x1 = {
+                    beforeAfterPickerPair = null
+                    startBeforeAfterImageExport(pair, BeforeAfterImageGenerator.Aspect.SQUARE_1_1)
+                },
+                onPickVideo = {
+                    beforeAfterPickerPair = null
+                    startBeforeAfterVideoExport(pair)
+                }
+            )
+        }
+
+        beforeAfterError?.let { msg ->
+            Dialog(onDismissRequest = { beforeAfterError = null }) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Text(
+                            text = "Couldn't build share card",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = msg,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TextButton(
+                            onClick = { beforeAfterError = null },
                             modifier = Modifier.align(Alignment.End)
                         ) { Text("OK") }
                     }
@@ -1373,7 +1885,11 @@ fun ComparisonCard(
     onShare: () -> Unit = {},
     onDownload: () -> Unit = {},
     onFeedback: () -> Unit = {},
-    onMakeVideo: () -> Unit = {}
+    onMakeVideo: () -> Unit = {},
+    onShareBeforeAfter: () -> Unit = {},
+    onTightenSilences: () -> Unit = {},
+    onApplyVoiceStyle: () -> Unit = {},
+    onTrimFillers: () -> Unit = {}
 ) {
     val isOriginalPlaying = currentlyPlaying == pair.originalFile
     val isCleanedPlaying = currentlyPlaying == pair.cleanedFile
@@ -1392,11 +1908,11 @@ fun ComparisonCard(
             .fillMaxWidth()
             .padding(vertical = 4.dp, horizontal = 4.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = androidx.compose.ui.graphics.Color.Transparent
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isCleanedPlaying) 4.dp else 1.dp
+            defaultElevation = if (isCleanedPlaying) 6.dp else 2.dp
         ),
         border = androidx.compose.foundation.BorderStroke(
             width = if (isCleanedPlaying) 2.dp else 0.5.dp,
@@ -1407,7 +1923,22 @@ fun ComparisonCard(
             }
         )
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            com.reelvoice.ui.theme.BrandRed.copy(alpha = 0.10f),
+                            com.reelvoice.ui.theme.BrandPurple.copy(alpha = 0.06f),
+                            com.reelvoice.ui.theme.BrandBlue.copy(alpha = 0.10f),
+                            androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f)
+                        ),
+                        start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                        end = androidx.compose.ui.geometry.Offset(1000f, 1400f)
+                    )
+                )
+        ) {
             // Primary row: play button + title + meta + delete
             Row(
                 modifier = Modifier
@@ -1447,24 +1978,33 @@ fun ComparisonCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                        ) {
+                            Text(
+                                text = typeLabel,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                fontSize = 9.sp,
+                                letterSpacing = 0.6.sp
+                            )
+                        }
                         Text(
-                            text = typeLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontSize = 10.sp,
-                            letterSpacing = 0.6.sp
-                        )
-                        Text(
-                            text = "  ·  ${pair.time}",
+                            text = pair.time,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         if (pair.durationSec > 0f) {
                             Text(
-                                text = "  ·  ${String.format(Locale.US, "%.1fs", pair.durationSec)}",
+                                text = "· ${String.format(Locale.US, "%.1fs", pair.durationSec)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1528,15 +2068,41 @@ fun ComparisonCard(
                 }
                 Spacer(modifier = Modifier.height(6.dp))
             } else {
-                // Compact waveform — shows always, subtly highlighted when playing
-                Box(
+                // Compact full-width waveform; if an original exists, a small
+                // "Play original" chip sits below so the A/B compare stays
+                // discoverable without eating a slot in the main action row.
+                Column(
                     modifier = Modifier.padding(
-                        start = 72.dp,
-                        end = 12.dp,
-                        bottom = 4.dp
+                        start = 16.dp,
+                        end = 16.dp,
+                        bottom = 8.dp
                     )
                 ) {
                     MiniWaveformStrip(cleanedPath, modifier = Modifier.fillMaxWidth())
+                    if (pair.originalFile != pair.cleanedFile) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { onPlayOriginal() }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (isOriginalPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                contentDescription = if (isOriginalPlaying) "Stop original" else "Play original",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isOriginalPlaying) "Stop original" else "Compare with original",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
                 }
             }
 
@@ -1546,28 +2112,31 @@ fun ComparisonCard(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             )
 
-            // Inline action row
+            // Compact action grid — fixed slots, SpaceBetween so layout is even
+            // on both audio (6 actions) and video (3 actions) cards. Secondary
+            // utilities (Save, Feedback) live under a "More" overflow menu.
+            var moreExpanded by remember { mutableStateOf(false) }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (pair.originalFile != pair.cleanedFile && !isVideo) {
-                    InlineAction(
-                        icon = if (isOriginalPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        label = if (isOriginalPlaying) "Stop" else "Original",
-                        onClick = onPlayOriginal,
-                        tint = MaterialTheme.colorScheme.secondary
-                    )
-                }
                 InlineAction(
                     icon = Icons.Filled.Share,
                     label = "Share",
                     onClick = onShare,
                     tint = MaterialTheme.colorScheme.primary
                 )
+                if (!isVideo && pair.originalFile != pair.cleanedFile) {
+                    InlineAction(
+                        icon = Icons.AutoMirrored.Filled.CompareArrows,
+                        label = "B/A",
+                        onClick = onShareBeforeAfter,
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                }
                 if (!isVideo) {
                     InlineAction(
                         icon = Icons.Filled.Movie,
@@ -1575,19 +2144,64 @@ fun ComparisonCard(
                         onClick = onMakeVideo,
                         tint = MaterialTheme.colorScheme.tertiary
                     )
+                    InlineAction(
+                        icon = Icons.Filled.ContentCut,
+                        label = "Tighten",
+                        onClick = onTightenSilences,
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                    InlineAction(
+                        icon = Icons.Filled.Tune,
+                        label = "Style",
+                        onClick = onApplyVoiceStyle,
+                        tint = MaterialTheme.colorScheme.tertiary
+                    )
                 }
-                InlineAction(
-                    icon = Icons.Filled.Download,
-                    label = "Save",
-                    onClick = onDownload,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                InlineAction(
-                    icon = Icons.Filled.ThumbUp,
-                    label = "Feedback",
-                    onClick = onFeedback,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Box {
+                    InlineAction(
+                        icon = Icons.Filled.MoreHoriz,
+                        label = "More",
+                        onClick = { moreExpanded = true },
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = moreExpanded,
+                        onDismissRequest = { moreExpanded = false }
+                    ) {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Save to Downloads") },
+                            leadingIcon = {
+                                Icon(Icons.Filled.Download, contentDescription = null)
+                            },
+                            onClick = {
+                                moreExpanded = false
+                                onDownload()
+                            }
+                        )
+                        if (!isVideo) {
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("Trim fillers (beta)") },
+                                leadingIcon = {
+                                    Icon(Icons.Filled.AutoAwesome, contentDescription = null)
+                                },
+                                onClick = {
+                                    moreExpanded = false
+                                    onTrimFillers()
+                                }
+                            )
+                        }
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Feedback") },
+                            leadingIcon = {
+                                Icon(Icons.Filled.ThumbUp, contentDescription = null)
+                            },
+                            onClick = {
+                                moreExpanded = false
+                                onFeedback()
+                            }
+                        )
+                    }
+                }
             }
         }
     }
@@ -1600,26 +2214,37 @@ private fun InlineAction(
     onClick: () -> Unit,
     tint: Color,
 ) {
-    Row(
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
+            .widthIn(min = 52.dp)
+            .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 4.dp, vertical = 6.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = tint,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(4.dp))
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(tint.copy(alpha = 0.13f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = tint,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 12.sp
+            fontSize = 10.sp,
+            maxLines = 1,
+            textAlign = TextAlign.Center
         )
     }
 }

@@ -35,7 +35,7 @@ import kotlin.math.min
  */
 class WaveformVideoEncoder(
     private val sampler: WaveformWindowSampler,
-    private val renderer: WaveformFrameRenderer,
+    private val renderer: FrameRenderer,
     private val width: Int = DEFAULT_WIDTH,
     private val height: Int = DEFAULT_HEIGHT,
     private val fps: Int = DEFAULT_FPS,

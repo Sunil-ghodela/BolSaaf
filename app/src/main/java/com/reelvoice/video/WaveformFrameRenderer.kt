@@ -18,25 +18,39 @@ import kotlin.math.max
  * per-frame amplitude envelope, optional title + subtitle text. Matches the app's
  * light theme and BrandGradient stops (red → purple → blue).
  */
+interface FrameRenderer {
+    fun render(canvas: Canvas, amplitudes: FloatArray)
+}
+
 class WaveformFrameRenderer(
     private val width: Int,
     private val height: Int,
     private val title: String? = null,
-    private val subtitle: String? = null
-) {
+    private val subtitle: String? = null,
+    /** Optional visual recipe — overrides brand defaults when non-null. */
+    private val template: ReelTemplate? = null,
+) : FrameRenderer {
+
+    private val resolvedTitle: String? = template?.titleText ?: title
+    private val resolvedSubtitle: String? = template?.subtitleText ?: subtitle
+
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        val stops = template?.bgStops
+            ?: intArrayOf(BRAND_RED_SOFT, BRAND_PURPLE_SOFT, BRAND_BLUE_SOFT)
         shader = LinearGradient(
             0f, 0f, width.toFloat(), height.toFloat(),
-            intArrayOf(BRAND_RED_SOFT, BRAND_PURPLE_SOFT, BRAND_BLUE_SOFT),
+            stops,
             floatArrayOf(0f, 0.5f, 1f),
             Shader.TileMode.CLAMP
         )
     }
 
     private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        val stops = template?.barStops
+            ?: intArrayOf(BRAND_RED, BRAND_PURPLE, BRAND_BLUE)
         shader = LinearGradient(
             0f, height * 0.25f, 0f, height * 0.75f,
-            intArrayOf(BRAND_RED, BRAND_PURPLE, BRAND_BLUE),
+            stops,
             floatArrayOf(0f, 0.5f, 1f),
             Shader.TileMode.CLAMP
         )
@@ -44,21 +58,22 @@ class WaveformFrameRenderer(
     }
 
     private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.BLACK
+        color = template?.textColor ?: Color.BLACK
         textAlign = Paint.Align.CENTER
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        textSize = height * 0.042f
+        textSize = height * 0.044f
     }
 
     private val subtitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF6B7280.toInt()
+        color = template?.textColor?.let { (it and 0x00FFFFFF) or (0xCC shl 24) }
+            ?: 0xFF6B7280.toInt()
         textAlign = Paint.Align.CENTER
         typeface = Typeface.DEFAULT
         textSize = height * 0.026f
     }
 
     private val watermarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x66000000.toInt()
+        color = template?.watermarkColor ?: 0x66000000.toInt()
         textAlign = Paint.Align.CENTER
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         textSize = height * 0.018f
@@ -66,7 +81,7 @@ class WaveformFrameRenderer(
 
     private val barRect = RectF()
 
-    fun render(canvas: Canvas, amplitudes: FloatArray) {
+    override fun render(canvas: Canvas, amplitudes: FloatArray) {
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
         val barCount = amplitudes.size
@@ -91,10 +106,10 @@ class WaveformFrameRenderer(
             canvas.drawRoundRect(barRect, cornerRadius, cornerRadius, barPaint)
         }
 
-        title?.let {
+        resolvedTitle?.let {
             canvas.drawText(it, width * 0.5f, height * 0.18f, titlePaint)
         }
-        subtitle?.let {
+        resolvedSubtitle?.let {
             canvas.drawText(it, width * 0.5f, height * 0.23f, subtitlePaint)
         }
         canvas.drawText(WATERMARK, width * 0.5f, height * 0.94f, watermarkPaint)

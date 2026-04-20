@@ -30,6 +30,7 @@ import com.reelvoice.audio.VoiceApiPhase2Client
 import com.reelvoice.audio.VoiceCleaningException
 import com.reelvoice.audio.AdaptiveAudioAnalyzer
 import com.reelvoice.audio.FeedbackAdaptiveMemory
+import com.reelvoice.audio.ModePreset
 import com.reelvoice.audio.pcm16LeToShortArray
 import com.reelvoice.audio.ProcessingQualityGuard
 import com.reelvoice.audio.VoiceBackground
@@ -238,6 +239,38 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * Apply a one-tap [ModePreset]: syncs BG id, cleaning preset and mix volume
+     * then jumps straight into the upload flow. If the server hasn't shipped the
+     * exact [ModePreset.preferredBackgroundId] yet we fall back to the first
+     * listed alternate, so the tile still does something useful today.
+     */
+    private fun applyModePreset(preset: ModePreset) {
+        val preferredIdx = voiceBackgrounds
+            .indexOfFirst { it.id.equals(preset.preferredBackgroundId, ignoreCase = true) }
+        val resolvedIdx = if (preferredIdx >= 0) preferredIdx else {
+            preset.fallbackBackgroundIds
+                .firstNotNullOfOrNull { fid ->
+                    voiceBackgrounds.indexOfFirst { it.id.equals(fid, ignoreCase = true) }
+                        .takeIf { it >= 0 }
+                } ?: 0
+        }
+        if (voiceBackgrounds.isNotEmpty()) {
+            selectedBackgroundIndex = resolvedIdx.coerceIn(0, voiceBackgrounds.lastIndex)
+        }
+        cleaningPreset = preset.cleaningPreset
+        bgMixVolume = preset.bgMixDefault.coerceIn(0.02f, 0.5f)
+        processingFlow = ProcessingFlow.ADD_BACKGROUND
+
+        val msg = if (preferredIdx >= 0) {
+            "${preset.emoji} ${preset.displayLabel} mode ready — pick your voice clip"
+        } else {
+            "${preset.emoji} ${preset.displayLabel} applied — audio coming soon, using ${voiceBackgrounds.getOrNull(resolvedIdx)?.label ?: "default"} for now"
+        }
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        openUploadPicker()
+    }
+
+    /**
      * Atomically switch to VIDEO_PROCESS and open the video picker.
      * Avoids any read-after-write timing ambiguity when callers sequentially
      * change mode then open the picker on the next line — the previous
@@ -383,6 +416,7 @@ class MainActivity : ComponentActivity() {
                             lastAdaptiveProfile?.let { cleaningPreset = it.suggestedCleaningPreset }
                         },
                         onProminentReelClick = { processingFlow = ProcessingFlow.REEL_MODE },
+                        onPickModePreset = { preset -> applyModePreset(preset) },
                         onOpenSettings = { showSettingsDialog() },
                         reelVariantFiles = latestReelVariantFiles,
                         onPlayReelVariant = { fileName -> playAudioFile(fileName) },
@@ -539,6 +573,7 @@ class MainActivity : ComponentActivity() {
                             lastAdaptiveProfile?.let { cleaningPreset = it.suggestedCleaningPreset }
                         },
                         onProminentReelClick = { processingFlow = ProcessingFlow.REEL_MODE },
+                        onPickModePreset = { preset -> applyModePreset(preset) },
                         onOpenSettings = { showSettingsDialog() },
                         reelVariantFiles = latestReelVariantFiles,
                         onPlayReelVariant = { fileName -> playAudioFile(fileName) },
@@ -2463,6 +2498,8 @@ class MainActivity : ComponentActivity() {
             fileName.endsWith(".wav", true) -> "audio/wav"
             fileName.endsWith(".mp3", true) -> "audio/mpeg"
             fileName.endsWith(".m4a", true) -> "audio/mp4"
+            fileName.endsWith(".png", true) -> "image/png"
+            fileName.endsWith(".jpg", true) || fileName.endsWith(".jpeg", true) -> "image/jpeg"
             else -> "*/*"
         }
         return android.content.Intent(android.content.Intent.ACTION_SEND).apply {

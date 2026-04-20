@@ -12,12 +12,12 @@ import kotlin.math.sqrt
  *
  * The sampler is presentation-agnostic — the renderer decides how to paint the bars.
  */
-class WaveformWindowSampler(
+open class WaveformWindowSampler(
     val samples: ShortArray,
     val sampleRate: Int
 ) {
 
-    val durationSeconds: Float = if (sampleRate > 0) samples.size.toFloat() / sampleRate else 0f
+    open val durationSeconds: Float = if (sampleRate > 0) samples.size.toFloat() / sampleRate else 0f
 
     /**
      * Bars for a single frame at [timeSeconds]. Returns [barCount] amplitudes in 0..1
@@ -25,7 +25,7 @@ class WaveformWindowSampler(
      * Amplitudes are RMS compressed to [shape] via a soft log curve so quiet speech still
      * shows up without clipping the peaks.
      */
-    fun sampleFrame(
+    open fun sampleFrame(
         timeSeconds: Float,
         barCount: Int,
         windowSpanSeconds: Float = 1.2f,
