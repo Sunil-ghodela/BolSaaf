@@ -14,15 +14,19 @@ val envProps = Properties().apply {
 android {
     namespace = "com.reelvoice"
     compileSdk = 36
+    ndkVersion = "27.0.11902837"
 
     defaultConfig {
         applicationId = "com.reelvoice"
         minSdk = 24
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.1.1"
+        versionCode = 7
+        versionName = "1.1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -104,11 +108,11 @@ dependencies {
     implementation(libs.material)
 
     // CameraX for in-app video recording (Live screen + Home "Record Live" video option)
-    implementation("androidx.camera:camera-core:1.3.4")
-    implementation("androidx.camera:camera-camera2:1.3.4")
-    implementation("androidx.camera:camera-lifecycle:1.3.4")
-    implementation("androidx.camera:camera-video:1.3.4")
-    implementation("androidx.camera:camera-view:1.3.4")
+    implementation("androidx.camera:camera-core:1.5.0")
+    implementation("androidx.camera:camera-camera2:1.5.0")
+    implementation("androidx.camera:camera-lifecycle:1.5.0")
+    implementation("androidx.camera:camera-video:1.5.0")
+    implementation("androidx.camera:camera-view:1.5.0")
     // CameraX exposes Guava's ListenableFuture in its public API; since AGP/SDK 35
     // no longer pulls it transitively, bring in real Guava (android flavor).
     implementation("com.google.guava:guava:33.0.0-android")
