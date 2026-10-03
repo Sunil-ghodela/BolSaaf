@@ -123,8 +123,10 @@ class BillingManager(
                 )
             )
             .build()
-        billingClient.queryProductDetailsAsync(params) { result, products ->
+        // Billing Library 8+: second arg is QueryProductDetailsResult (not List<ProductDetails>).
+        billingClient.queryProductDetailsAsync(params) { result, productDetailsResult ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                val products = productDetailsResult.productDetailsList
                 proMonthlyDetails = products.firstOrNull { it.productId == PRODUCT_PRO_MONTHLY }
                 if (proMonthlyDetails == null) {
                     Log.w(TAG, "Pro monthly product not found in Play response")

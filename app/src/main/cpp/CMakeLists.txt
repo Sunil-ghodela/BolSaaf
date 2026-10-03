@@ -3,6 +3,9 @@ project(rnnoise-lib)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fPIC -std=c++17")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -fPIC")
+# 16 KB page size — Play enforcement (also passed via Gradle cmake arguments).
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,max-page-size=16384")
 
 # Upstream Xiph RNNoise (see https://github.com/xiph/rnnoise ) + JNI shim
 add_library(

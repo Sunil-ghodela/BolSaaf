@@ -13,14 +13,14 @@ val envProps = Properties().apply {
 
 android {
     namespace = "com.reelvoice"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.reelvoice"
         minSdk = 24
-        targetSdk = 35
-        versionCode = 5
-        versionName = "1.1.0"
+        targetSdk = 36
+        versionCode = 6
+        versionName = "1.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -76,6 +76,10 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        // Uncompressed, 16 KB–aligned native libs (Play requirement).
+        jniLibs {
+            useLegacyPackaging = false
+        }
     }
 
     externalNativeBuild {
@@ -114,7 +118,7 @@ dependencies {
 
     // Google Play Billing — Pro subscription unlock.
     // Server validation of purchase tokens goes via /voice/billing/validate/ (see BILLING_CONTRACT.md).
-    implementation("com.android.billingclient:billing-ktx:7.0.0")
+    implementation("com.android.billingclient:billing:8.0.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
