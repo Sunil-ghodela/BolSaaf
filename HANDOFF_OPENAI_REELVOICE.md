@@ -1,4 +1,4 @@
-# ReelVoice — Handoff (updated 2026-10-15)
+# ReelVoice — Handoff (updated 2026-10-15, post E2E session)
 
 ## Objective
 
@@ -29,19 +29,27 @@ Four mode backgrounds now exist **as real server assets** — no fallback needed
 - Client `applyModePreset()` now adopts the server's `default_volume` when the preferred background exists (`MainActivity.kt`). Honest fallback labeling remains as a safety net only.
 - Server patches applied via `scripts/patch_server_backgrounds.py` + `scripts/patch_server_bg_validation.py`; originals backed up on VPS at `/tmp/bak_background_mix.py`, `/tmp/bak_reel_mode.py`, `/tmp/bak_views.py`. `voice-gunicorn` + `voice-celery` restarted after patches.
 
-## ⚠️ CRITICAL FINDING — API domain has no DNS (2026-10-15)
+## ⚠️ CRITICAL FINDING — RESOLVED: API domain migrated (2026-10-15 evening)
 
-- `shadowselfwork.com` is **not registered** (Verisign RDAP 404; NXDOMAIN from 8.8.8.8/1.1.1.1 and on the VPS itself). All three Kotlin clients hardcode `https://shadowselfwork.com/voice/` (`VoiceApiPhase2Client.kt`, `VoiceCleaningApi.kt`, `AuthApi.kt`). **Every network feature of any shipped build is failing** unless something else resolves the name.
-- The server stack itself is healthy at `root@77.237.234.45` (nginx vhost `selfshadowwork`, `voice-gunicorn` unix socket, Celery worker).
-- **Migration prep done on server:** new vhost `/etc/nginx/sites-enabled/voice.tranquilwaters.in` mirrors the voice config (status/upload/media splits, rate-limit zones); `ALLOWED_HOSTS` in `/var/www/simplelms/backend/.env` now includes `voice.tranquilwaters.in`. Health + backgrounds return 200 against that Host locally.
-- **Needed to finish (user decision):**
-  1. Add DNS A record `voice.tranquilwaters.in → 77.237.234.45` at the `tranquilwaters.in` DNS provider (apex already resolves fine), OR re-register `shadowselfwork.com` at a registrar.
-  2. Then run `certbot --nginx -d voice.tranquilwaters.in` (needs DNS live first).
-  3. Then swap the three client `baseUrl`s to `https://voice.tranquilwaters.in/voice/`, rebuild, smoke test.
+- `shadowselfwork.com` is **not registered** (Verisign RDAP 404; NXDOMAIN from 8.8.8.8/1.1.1.1 and on the VPS itself). All three Kotlin clients had hardcoded `https://shadowselfwork.com/voice/` — every network feature of any shipped build was failing.
+- **Fixed by migrating to `voice.tranquilwaters.in`:** user added DNS A record → `77.237.234.45`; certbot issued Let's Encrypt cert (live); nginx vhost `/etc/nginx/sites-enabled/voice.tranquilwaters.in` serves `/voice/` + `/media/` with the same rate-limit zones; `ALLOWED_HOSTS` in `/var/www/simplelms/backend/.env` includes the new host.
+- **All 3 client baseUrls now `https://voice.tranquilwaters.in/voice/`** (`VoiceApiPhase2Client.kt`, `VoiceCleaningApi.kt`, `AuthApi.kt`) — commit `e5bd72d`, pushed to `main`.
+- Legacy `shadowselfwork` nginx vhost left in place (harmless); can be removed later. Old domain is dead — do not reference it anywhere.
 
-## 🔲 P0 #3: Mobile-to-server E2E (pending)
+## ✅ DONE — P0 #3: First mobile-to-server E2E round (2026-10-15)
 
-Test plan: `MOBILE_E2E_TEST_PLAN.md`. Verified so far: health, backgrounds, add_background (server-side curl). Still to verify from the device: quick clean, extract voice, reel V1/V2 polling, video processing, live recording + upload, network failure/retry. Also confirm the emulator/device can resolve the final API host (DNS must exist first — see above).
+Verified end-to-end from the emulator against the NEW domain:
+
+- **Health + backgrounds**: app fetched `availableModes=[basic, standard, studio, pro]` and all 9 backgrounds (incl. bhakti/cricket/confession/study) — server access logs show 200s from Dalvik UA.
+- **Live recording → upload → add_background**: recorded on-device (service foreground), picked the file via Add-Vibe flow with Bhakti background, `POST /voice/add_background/` → job 120 → `pending → completed` → output downloaded via `/voice/cleaned_output/120/` → playback verified (AudioTrack: full 5.0 s = 240,000 frames @48k).
+- **Crash fixed during testing**: `AudioRecorder` OOM'd on longer recordings (`ByteArrayOutputStream` buffering whole session in RAM, 33 MB alloc fail at ~5.5 min mark in emulator test). PCM now streams to temp files and WAV is written streamed (`writeWavFromPcmTemp`) — commit `e5bd72d`.
+- Test artifacts cleaned: 44-byte broken WAVs from the pre-fix crash deleted from emulator.
+
+Still to verify (next session): Quick Clean, Extract Voice, Reel V1/V2 polling, Video Processing, network failure/retry path — per `MOBILE_E2E_TEST_PLAN.md`.
+
+## 🔲 P0 #3 remaining: Mobile-to-server E2E (next session)
+
+Test plan: `MOBILE_E2E_TEST_PLAN.md`. Verified so far: health, backgrounds, add_background (server-side curl **and full emulator flow** incl. playback). Still to verify from the device: quick clean, extract voice, reel V1/V2 polling, video processing, live recording + upload to other flows, network failure/retry. Note: emulator `sdcard/Download` picked files fine; Play-files picker showed "No items" — real device testing will differ.
 
 ## 🔲 Billing (before production revenue)
 
@@ -62,9 +70,19 @@ Test plan: `MOBILE_E2E_TEST_PLAN.md`. Verified so far: health, backgrounds, add_
 - [x] No use-after-release/leak paths in service lifecycle (idempotent release, join-before-release kept from `AudioRecorder`).
 - [x] Every visible mode maps to a real server background asset; unknown IDs rejected server-side.
 - [x] BG mix affects real mixed output (server-verified at selected volume).
-- [ ] Full device E2E evidence in client + server logs (blocked on DNS fix).
+- [x] Full emulator E2E evidence: add_background flow incl. recording, upload, polling, download, playback (server logs + AudioTrack evidence).
+- [ ] Remaining E2E flows (quick clean, extract, reel V1/V2, video) from device.
 - [ ] Billing cannot unlock Pro without server confirmation (stub still present).
 - [x] `./gradlew :app:assembleDebug` passes.
+- [x] API domain reachable over HTTPS (`voice.tranquilwaters.in`), cert valid.
+
+## Emulator test-session notes (for anyone resuming)
+
+- `emulator-5554` (API 35 arm64) was used; app installed via `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
+- `POST_NOTIFICATIONS` + `RECORD_AUDIO` granted via `adb shell pm grant`.
+- UI coordinates shift between screens — use `uiautomator dump` + text search, not hardcoded taps.
+- File picker: system Files app → Show roots → Downloads → pick WAV; in-app "BROWSE FILES IN OTHER APPS" opens the same Files UI.
+- Fresh installed app starts at quota 20/20; each session decrements only after successful flows.
 
 ## Server quick-reference
 
