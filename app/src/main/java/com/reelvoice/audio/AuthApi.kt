@@ -13,7 +13,7 @@ import java.net.URL
  * SharedPreferences — this class is pure transport.
  */
 class AuthApi(
-    private val baseUrl: String = "https://shadowselfwork.com/voice/"
+    private val baseUrl: String = "https://voice.tranquilwaters.in/voice/"
 ) {
     companion object {
         private const val TAG = "AuthApi"

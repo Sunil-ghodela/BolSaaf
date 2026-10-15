@@ -31,7 +31,7 @@ data class VoiceApiHealth(
  * - If [cleaned_url] is empty but [job_id] is present, polls GET /voice/status/{job_id}/ until completed or failed.
  */
 class VoiceCleaningApi(
-    private val baseUrl: String = "https://shadowselfwork.com/voice/"
+    private val baseUrl: String = "https://voice.tranquilwaters.in/voice/"
 ) {
 
     companion object {

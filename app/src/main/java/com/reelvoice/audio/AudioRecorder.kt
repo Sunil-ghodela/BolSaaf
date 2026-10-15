@@ -11,6 +11,7 @@ import android.util.Log
 import android.os.Process
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -166,8 +167,12 @@ class AudioRecorder(private val context: Context) {
         }
         val needSrc = PcmResample.requiredSourceSamples(actualRate)
 
-        val originalAudioData = ByteArrayOutputStream()
-        val cleanedAudioData = ByteArrayOutputStream()
+        // Stream PCM to temp files instead of buffering everything in RAM
+        // (long recordings used to OOM in ByteArrayOutputStream).
+        val originalTemp = File(originalFile.parentFile, originalFile.name + ".pcm.tmp")
+        val cleanedTemp = File(cleanedFile.parentFile, cleanedFile.name + ".pcm.tmp")
+        val originalPcm = FileOutputStream(originalTemp).buffered()
+        val cleanedPcm = FileOutputStream(cleanedTemp).buffered()
 
         var accum = ShortArray(4096)
         var accumLen = 0
@@ -193,10 +198,10 @@ class AudioRecorder(private val context: Context) {
             val staged = frame48.copyOf()
             val preset = audioProcessor?.cleaningPreset ?: CleaningPreset.NORMAL
             AudioInputStage.apply(staged, preset)
-            originalAudioData.write(shortsToBytes(staged))
+            shortsToBytes(staged).let { originalPcm.write(it) }
             val cleaned = staged.copyOf()
             audioProcessor?.processStagedFrame(cleaned)
-            cleanedAudioData.write(shortsToBytes(cleaned))
+            shortsToBytes(cleaned).let { cleanedPcm.write(it) }
             onAudioDataCallback?.invoke(cleaned)
         }
 
@@ -220,10 +225,46 @@ class AudioRecorder(private val context: Context) {
             processAndWrite(frame48)
         }
 
-        writeWavFile(originalAudioData.toByteArray(), originalFile)
-        writeWavFile(cleanedAudioData.toByteArray(), cleanedFile)
+        originalPcm.flush()
+        cleanedPcm.flush()
+        originalPcm.close()
+        cleanedPcm.close()
+
+        try {
+            writeWavFromPcmTemp(originalTemp, originalFile)
+            writeWavFromPcmTemp(cleanedTemp, cleanedFile)
+        } finally {
+            originalTemp.delete()
+            cleanedTemp.delete()
+        }
 
         onRecordingFinished?.invoke(originalFile, cleanedFile)
+    }
+
+    /** Wraps a raw PCM temp file into a WAV (streamed, low memory). */
+    private fun writeWavFromPcmTemp(pcmTemp: File, outputFile: File) {
+        val pcmDataLen = pcmTemp.length()
+        val channels = 1
+        val byteRate = SAMPLE_RATE * channels * 2
+        val totalDataLen = (pcmDataLen + 36).toInt()
+        FileInputStream(pcmTemp).use { pcmIn ->
+            FileOutputStream(outputFile).use { fos ->
+                fos.write("RIFF".toByteArray())
+                fos.write(intToBytes(totalDataLen))
+                fos.write("WAVE".toByteArray())
+                fos.write("fmt ".toByteArray())
+                fos.write(intToBytes(16))
+                fos.write(shortToBytes(1))
+                fos.write(shortToBytes(channels.toShort()))
+                fos.write(intToBytes(SAMPLE_RATE))
+                fos.write(intToBytes(byteRate))
+                fos.write(shortToBytes((channels * 2).toShort()))
+                fos.write(shortToBytes(16))
+                fos.write("data".toByteArray())
+                fos.write(intToBytes(pcmDataLen.toInt()))
+                pcmIn.copyTo(fos)
+            }
+        }
     }
 
     private fun shortsToBytes(shortArray: ShortArray): ByteArray {

@@ -58,7 +58,7 @@ data class VoiceBackground(
  * This is scaffold-safe and can be integrated screen-by-screen.
  */
 class VoiceApiPhase2Client(
-    private val baseUrl: String = "https://shadowselfwork.com/voice/"
+    private val baseUrl: String = "https://voice.tranquilwaters.in/voice/"
 ) {
     companion object {
         private const val TAG = "VoiceApiPhase2Client"
