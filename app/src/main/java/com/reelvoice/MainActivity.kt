@@ -17,6 +17,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.reelvoice.ui.VibeUi
 import com.reelvoice.ui.screens.AudioPair
 import com.reelvoice.ui.screens.HistoryScreen
@@ -25,7 +26,6 @@ import com.reelvoice.ui.screens.SaveInfo
 import com.reelvoice.audio.AudioProcessor
 import com.reelvoice.audio.AuthApi
 import com.reelvoice.audio.CleaningPreset
-import com.reelvoice.audio.AudioRecorder
 import com.reelvoice.audio.VoiceApiPhase2Client
 import com.reelvoice.audio.VoiceCleaningException
 import com.reelvoice.audio.AdaptiveAudioAnalyzer
@@ -48,6 +48,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import org.json.JSONObject
+import kotlinx.coroutines.launch
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -67,7 +68,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private lateinit var audioProcessor: AudioProcessor
-    private lateinit var audioRecorder: AudioRecorder
     private lateinit var voiceApi: VoiceCleaningApi
     private lateinit var voiceApiPhase2: VoiceApiPhase2Client
     private var tempRecordingFile: File? = null
@@ -258,7 +258,10 @@ class MainActivity : ComponentActivity() {
             selectedBackgroundIndex = resolvedIdx.coerceIn(0, voiceBackgrounds.lastIndex)
         }
         cleaningPreset = preset.cleaningPreset
-        bgMixVolume = preset.bgMixDefault.coerceIn(0.02f, 0.5f)
+        // Prefer the server's calibrated default_volume for the resolved background;
+        // fall back to the preset's default if the entry lacks one.
+        bgMixVolume = (voiceBackgrounds.getOrNull(resolvedIdx)?.defaultVolume ?: preset.bgMixDefault)
+            .coerceIn(0.02f, 0.5f)
         processingFlow = ProcessingFlow.ADD_BACKGROUND
 
         val msg = if (preferredIdx >= 0) {
@@ -313,7 +316,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         audioProcessor = AudioProcessor(this)
-        audioRecorder = AudioRecorder(this)
         voiceApi = VoiceCleaningApi()
         voiceApiPhase2 = VoiceApiPhase2Client()
         freeMinutesLeft = loadFreeMinutes()
@@ -331,6 +333,16 @@ class MainActivity : ComponentActivity() {
         }
 
         checkPermissions()
+
+        // Surface recording results from the foreground service (survives recreation).
+        lifecycleScope.launch {
+            RecordingService.results.collect { result ->
+                if (result.timestamp != RecordingService.lastHandledTimestamp) {
+                    RecordingService.markResultHandled(result.timestamp)
+                    handleRecordingFinished(result.originalFile, result.cleanedFile, result.timestamp, result.success)
+                }
+            }
+        }
 
         setContent {
             ReelVoiceTheme {
@@ -670,7 +682,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        audioRecorder.stopRecording()
+        // Recording is owned by RecordingService and intentionally keeps running in background.
+        // Do NOT stop it here — the service releases its own recorder/processor resources.
         audioProcessor.destroy()
         billingManager.disconnect()
     }
@@ -721,10 +734,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkPermissions() {
-        val permissions = arrayOf(
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        )
+        val permissions = buildList {
+            add(Manifest.permission.RECORD_AUDIO)
+            add(Manifest.permission.READ_EXTERNAL_STORAGE)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
         val needPermissions = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
@@ -1030,60 +1046,52 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun handleRecordingFinished(origFile: File?, cleanFile: File?, timestamp: String, success: Boolean) {
+        isRecording = false
+        if (!success) {
+            Toast.makeText(this, "Recording failed", Toast.LENGTH_LONG).show()
+            return
+        }
+        val cleanFile = cleanFile ?: return
+        val durationSec = wavDurationSec(cleanFile)
+        showSuccess = true
+        lastSaveInfo = SaveInfo(cleanFile.name, durationSec, timestamp)
+        addAudioPair(timestamp, origFile ?: cleanFile, cleanFile, isRecording = true)
+        Toast.makeText(this, "Saved · ${"%.1f".format(durationSec)}s · ${cleanFile.name}", Toast.LENGTH_LONG).show()
+        window.decorView.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+
+        Thread {
+            Thread.sleep(2800)
+            runOnUiThread {
+                showSuccess = false
+                lastSaveInfo = null
+            }
+        }.start()
+    }
+
     private fun startRecording() {
         if (!audioProcessor.initialize()) {
             Toast.makeText(this, "Failed to initialize audio processor", Toast.LENGTH_SHORT).show()
             return
         }
-        audioProcessor.cleaningPreset = cleaningPreset
+        audioProcessor.destroy()  // service owns its own processor instance for recording
         window.decorView.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
 
-        // Set audio processor for RNNoise
-        audioRecorder.setAudioProcessor(audioProcessor)
-        
         // Create output directory if not exists
         val outputDir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "ReelVoice")
         if (!outputDir.exists()) outputDir.mkdirs()
-        
+
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
         val originalFile = File(outputDir, "original_$timestamp.wav")
         val cleanedFile = File(outputDir, "cleaned_$timestamp.wav")
         tempRecordingFile = originalFile
-        
-        audioRecorder.setCallbacks(
-            onData = { buffer ->
-                // Callback for live audio visualization if needed
-            },
-            onFinished = { origFile, cleanFile ->
-                audioProcessor.destroy()
-                isRecording = false
 
-                val durationSec = wavDurationSec(cleanFile)
-                runOnUiThread {
-                    showSuccess = true
-                    lastSaveInfo = SaveInfo(cleanFile.name, durationSec, timestamp)
-                    addAudioPair(timestamp, origFile, cleanFile, isRecording = true)
-                    Toast.makeText(this, "Saved · ${"%.1f".format(durationSec)}s · ${cleanFile.name}", Toast.LENGTH_LONG).show()
-                    window.decorView.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                }
-
-                Thread {
-                    Thread.sleep(2800)
-                    runOnUiThread {
-                        showSuccess = false
-                        lastSaveInfo = null
-                    }
-                }.start()
-            }
-        )
-        
-        val started = audioRecorder.startRecording(originalFile, cleanedFile)
-        if (started) {
+        // Recording is owned by the foreground service so it survives backgrounding.
+        if (RecordingService.start(this, originalFile, cleanedFile, timestamp, cleaningPreset)) {
             isRecording = true
             Toast.makeText(this, "Recording… speak normally", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, "Failed to start recording", Toast.LENGTH_SHORT).show()
-            audioProcessor.destroy()
         }
     }
 
@@ -1120,8 +1128,8 @@ class MainActivity : ComponentActivity() {
 
     private fun stopRecording() {
         window.decorView.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-        audioRecorder.stopRecording()
-        isRecording = false
+        // The foreground service owns the recorder; stopping it flushes WAVs and reports back.
+        RecordingService.stop(this)
         Toast.makeText(this, "Finishing & saving…", Toast.LENGTH_SHORT).show()
     }
 
