@@ -11,6 +11,7 @@
 
 ## Next coordinated flow
 
+0. **Contract first:** `BILLING_CONTRACT.md` rev 2 is on branch `feature/reelvoice-product-plan` and open for approval. It defines the Free / Pro Monthly / Pro Annual matrix, audio-video entitlements, server validation, restore, expiry, and cancellation, with **no hardcoded pricing**. Billing implementation starts only after this contract is approved.
 1. Keep the Android UI cleanup limited to the remaining design polish and consistent audio/video feature presentation.
 2. Finish the billing contract and server validation before exposing paid video/background limits.
 3. Complete Quick Clean, Extract Voice, Reel V1/V2, Video Processing, and retry/offline E2E checks.
