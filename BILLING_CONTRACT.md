@@ -4,7 +4,9 @@
 
 ## Status of this document
 
-- **Draft for approval.** Implementation starts only after the owner signs off.
+- **Structure approved by the owner (2026-04-16).** Pricing and the Free quota values are **owner-pending** — they will be finalized separately.
+- **Implementation is gated:** do NOT write `billing_views.py` or client changes until pricing + free quotas land. Keep the flow specified here *prepared*.
+- **`pro_annual` is canonical** for the yearly product. The old `pro_yearly` was a placeholder only.
 - **Pricing is intentionally NOT hardcoded.** The `Price` column says `from Play` — the real amount lives in Play Console base plans and is rendered by `ProductDetails` at runtime. Final numbers (INR, introductory offers, yearly discount) are an owner decision.
 - Product IDs, entitlement keys, and response shapes below are the stable contract. Renaming them after launch strands existing subscribers or breaks the client.
 
@@ -327,14 +329,34 @@ Play pushes to a Pub/Sub topic for: renewal, cancel, expire, revoke. For MVP ski
 
 ---
 
-## 10. Open questions (owner decisions before implementation)
+## 10. Implementation readiness (prepared — do NOT start until pricing + quotas land)
+
+When the owner supplies pricing and Free quota values, execute in this order. Nothing here runs before then.
+
+1. **Play Console:** create base plans for `pro_monthly` and `pro_annual` with the finalized prices/offers. Product IDs are immutable.
+2. **Server schema:** add the `VoiceUser` fields in §3 (`subscription_product_id`, `subscription_state`, `auto_renewing`, `last_verified_at`, `purchase_token_hash`) via migration; derive `is_pro` from `pro_expires_at` at read time.
+3. **Server endpoint:** implement `/voice/billing/validate/` per §3; add the route in `apps/voice/urls.py`; configure the Play service account (§9).
+4. **Server entitlements:** implement `build_entitlements(user)` and return it from `/voice/auth/me/` (§2, §4) using the finalized quota values. `pro_monthly` and `pro_annual` map to the same entitlement set.
+5. **Client — remove client-only Pro unlock:** delete `MainActivity.validatePurchaseWithServer`'s local `isProMember = true`; replace it with the real POST → `/me/` refresh. This stub must never ship.
+6. **Client — server-validated flow:** wire `BillingManager.onPurchaseSuccess` → validate endpoint → `/me/` (§8). Add `pro_annual` alongside `pro_monthly` in the product query.
+7. **Client — entitlement-driven UI:** `AuthApi.AuthUser` gains `plan`, `autoRenewing`, `entitlements`; `ProfileScreen.PlanDialog` reads price from `ProductDetails` and limits from `entitlements`; drop hardcoded `₹299` / `8 min` copy.
+8. **Verify:** license-tester purchase → server sets `pro_expires_at` → `/me/` reports `is_pro` → restart app restores Pro → cancel keeps Pro to period end → expiry reverts to Free.
+
+### Ready-state guarantees
+
+- No client code grants Pro on its own — the only path to `is_pro: true` is a server-verified token (§“Why a server at all”).
+- Entitlement keys in §2 are the single shared vocabulary for client, server, and the landing page.
+
+---
+
+## 11. Open questions (owner decisions before implementation)
 
 1. **Pricing:** monthly amount, annual amount, annual discount %, and whether to run an introductory offer. Not coded — set in Play Console.
 2. **Free quota values:** `voice_minutes_monthly` and `video_minutes_monthly` for Free.
 3. **Grace period UX:** on a server 502 after a successful client purchase, grant a 24h provisional Pro while retrying? Google recommends yes — confirm.
 4. **Family sharing:** Play default is ON. Disable or keep?
 5. **Ads:** do we ship ads at all in the near term? `ad_free` entitlement only matters once ads exist.
-6. **`pro_annual` naming:** confirm `pro_annual` (canonical here) vs the old `pro_yearly` comment.
+6. ~~**`pro_annual` naming**~~ — **resolved:** `pro_annual` is canonical (owner-confirmed).
 
 ---
 
