@@ -62,7 +62,8 @@ fun ProfileScreen(
     proAnnualPrice: String = "—",
     proMonthlyPriceSuffix: String = "/month",
     proAnnualPriceSuffix: String = "/year",
-    entitlements: AuthApi.Entitlements = AuthApi.Entitlements.FREE_DEFAULT,
+    freeEntitlements: AuthApi.Entitlements = AuthApi.Entitlements.FREE_DEFAULT,
+    proEntitlements: AuthApi.Entitlements = AuthApi.Entitlements.FREE_DEFAULT,
     onUpgrade: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onLogin: (String, String) -> Unit = { _, _ -> },
@@ -483,7 +484,8 @@ fun ProfileScreen(
                 proAnnualPrice = proAnnualPrice,
                 proMonthlyPriceSuffix = proMonthlyPriceSuffix,
                 proAnnualPriceSuffix = proAnnualPriceSuffix,
-                entitlements = entitlements,
+                freeEntitlements = freeEntitlements,
+                proEntitlements = proEntitlements,
                 onDismiss = { showPlanDialog = false },
                 onUpgrade = {
                     showPlanDialog = false
@@ -647,7 +649,8 @@ fun PlanDialog(
     proAnnualPrice: String = "—",
     proMonthlyPriceSuffix: String = "/month",
     proAnnualPriceSuffix: String = "/year",
-    entitlements: AuthApi.Entitlements = AuthApi.Entitlements.FREE_DEFAULT,
+    freeEntitlements: AuthApi.Entitlements = AuthApi.Entitlements.FREE_DEFAULT,
+    proEntitlements: AuthApi.Entitlements = AuthApi.Entitlements.FREE_DEFAULT,
     onDismiss: () -> Unit,
     onUpgrade: () -> Unit
 ) {
@@ -749,11 +752,11 @@ fun PlanDialog(
                     isCurrent = !isProMember,
                     accentColor = MaterialTheme.colorScheme.primary,
                     bullets = listOfNotNull(
-                        entitlements.voiceMinutesMonthly?.let { "$it min voice cleaning / month" }
+                        freeEntitlements.voiceMinutesMonthly?.let { "$it min voice cleaning / month" }
                             ?: "Unlimited voice cleaning",
-                        "${entitlements.cleaningModes.joinToString(" · ") { it.replaceFirstChar(Char::uppercase) }} cleaning modes",
-                        "Video clean up to ${entitlements.maxVideoUploadMb} MB",
-                        entitlements.videoMinutesMonthly?.let { "$it min video / month" }
+                        "${freeEntitlements.cleaningModes.joinToString(" · ") { it.replaceFirstChar(Char::uppercase) }} cleaning modes",
+                        "Video clean up to ${freeEntitlements.maxVideoUploadMb} MB",
+                        freeEntitlements.videoMinutesMonthly?.let { "$it min video / month" }
                     )
                 )
 
@@ -769,12 +772,12 @@ fun PlanDialog(
                     isHighlighted = true,
                     bullets = listOfNotNull(
                         "Unlimited voice cleaning",
-                        "${entitlements.cleaningModes.joinToString(" · ") { it.replaceFirstChar(Char::uppercase) }} cleaning modes",
-                        entitlements.videoMinutesMonthly?.let { "Up to $it min video / month" },
-                        "Reel presets: ${entitlements.reelPresets.joinToString(", ")}",
-                        if (!entitlements.videoExportWatermark) "Video export without watermark" else null,
+                        "${proEntitlements.cleaningModes.joinToString(" · ") { it.replaceFirstChar(Char::uppercase) }} cleaning modes",
+                        proEntitlements.videoMinutesMonthly?.let { "Up to $it min video / month" },
+                        "Reel presets: ${proEntitlements.reelPresets.joinToString(", ")}",
+                        if (!proEntitlements.videoExportWatermark) "Video export without watermark" else null,
                         "Priority processing",
-                        if (entitlements.adFree) "Ad-free" else null
+                        if (proEntitlements.adFree) "Ad-free" else null
                     )
                 )
 

@@ -116,6 +116,7 @@ class MainActivity : ComponentActivity() {
     private var isProMember by mutableStateOf(false)
     private var isPurchaseInProgress by mutableStateOf(false)
     private var proEntitlements by mutableStateOf(AuthApi.Entitlements.FREE_DEFAULT)
+    private var proCatalog by mutableStateOf(AuthApi.PlanCatalog.DEFAULT)
     private var proPlan by mutableStateOf<String?>(null)
     private var proAutoRenewing by mutableStateOf(false)
     private var proMonthlyPrice by mutableStateOf("—")
@@ -340,6 +341,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Tier catalogue (Free + Pro capabilities) — drives the plan dialog regardless of login.
+        refreshBillingPlans()
+
         checkPermissions()
 
         // Surface recording results from the foreground service (survives recreation).
@@ -505,7 +509,8 @@ class MainActivity : ComponentActivity() {
                         showProMemberBadge = isProMember,
                         proMonthlyPrice = proMonthlyPrice,
                         proAnnualPrice = proAnnualPrice,
-                        entitlements = proEntitlements,
+                        freeEntitlements = proCatalog.free,
+                        proEntitlements = proCatalog.pro,
                         onUpgrade = { startProPurchase() },
                         onOpenSettings = { showSettingsDialog() },
                         onLogin = { email, password -> handleLogin(email, password) },
@@ -710,6 +715,14 @@ class MainActivity : ComponentActivity() {
      * Endpoint contract: see BILLING_CONTRACT.md. Pro is only granted when the server confirms;
      * we never flip [isProMember] locally.
      */
+    /** Fetch the shared tier catalogue from the server (capabilities, not prices). */
+    private fun refreshBillingPlans() {
+        Thread {
+            val catalog = runCatching { authApi.plans() }.getOrNull() ?: return@Thread
+            runOnUiThread { proCatalog = catalog }
+        }.start()
+    }
+
     /** Localized Play price for a subscription product (e.g. "₹79"), or "—" if not loaded yet. */
     private fun priceLabelFor(productId: String): String {
         val details = billingManager.proDetails(productId) ?: return "—"

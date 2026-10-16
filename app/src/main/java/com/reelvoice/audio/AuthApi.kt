@@ -124,6 +124,24 @@ class AuthApi(
         val autoRenewing: Boolean
     )
 
+    /** Tier catalogue (capabilities only; prices come from Play). Shared with iOS + landing page. */
+    data class PlanCatalog(
+        val free: Entitlements,
+        val pro: Entitlements
+    ) {
+        companion object {
+            val DEFAULT = PlanCatalog(Entitlements.FREE_DEFAULT, Entitlements.FREE_DEFAULT)
+
+            fun fromJson(o: JSONObject?): PlanCatalog {
+                if (o == null) return DEFAULT
+                return PlanCatalog(
+                    free = Entitlements.fromJson(o.optJSONObject("free")),
+                    pro = Entitlements.fromJson(o.optJSONObject("pro"))
+                )
+            }
+        }
+    }
+
     data class AuthResult(val token: String, val user: AuthUser)
 
     class AuthException(message: String, val status: Int) : Exception(message)
@@ -202,6 +220,12 @@ class AuthApi(
             proExpiresAt = json.optString("pro_expires_at").ifEmpty { null },
             autoRenewing = json.optBoolean("auto_renewing", false)
         )
+    }
+
+    /** GET /voice/billing/plans/ — public tier catalogue (no auth required). */
+    fun plans(): PlanCatalog {
+        val json = getJson("$base/billing/plans/", token = null)
+        return PlanCatalog.fromJson(json.optJSONObject("plans"))
     }
 
     // --- transport ---
