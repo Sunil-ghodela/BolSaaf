@@ -1,13 +1,13 @@
 # BolSaaf Billing Contract — Play Billing ⇄ Server
 
-> Date: 2026-04-16 (rev 2). Contract between Android client (`BillingManager`) and Django backend (`apps/voice/billing_views.py`). **Server endpoint not yet implemented** — this document is the spec. No billing code is written until this contract is approved.
+> Date: 2026-10-16 (rev 3). Contract between Android client (`BillingManager`) and Django backend (`apps/voice/billing_views.py`). **Server endpoint not yet implemented** — this document is the spec. No billing code is written until this contract is approved.
 
 ## Status of this document
 
-- **Structure approved by the owner (2026-04-16).** Pricing and the Free quota values are **owner-pending** — they will be finalized separately.
-- **Implementation is gated:** do NOT write `billing_views.py` or client changes until pricing + free quotas land. Keep the flow specified here *prepared*.
+- **Structure and launch decisions approved by the owner (2026-10-16).** Implementation can proceed against this revision.
+- **Implementation remains server-first:** do NOT ship client-only Pro unlocks; Play Console prices and server entitlements remain authoritative.
 - **`pro_annual` is canonical** for the yearly product. The old `pro_yearly` was a placeholder only.
-- **Pricing is intentionally NOT hardcoded.** The `Price` column says `from Play` — the real amount lives in Play Console base plans and is rendered by `ProductDetails` at runtime. Final numbers (INR, introductory offers, yearly discount) are an owner decision.
+- **Pricing is not hardcoded in the app.** Play Console base plans hold the launch amounts and `ProductDetails` renders the runtime price. Approved launch prices are ₹79/month and ₹599/year; introductory offers are off for launch.
 - Product IDs, entitlement keys, and response shapes below are the stable contract. Renaming them after launch strands existing subscribers or breaks the client.
 
 ## Why a server at all
@@ -28,8 +28,8 @@ If steps 3–4 fail or are skipped, the user is NOT Pro, regardless of what the 
 
 | Product ID | Display name | Base plan period | Price | Status |
 |---|---|---|---|---|
-| `pro_monthly` | BolSaaf Pro | 1 month | **from Play — TBD** | Create before implementation |
-| `pro_annual` | BolSaaf Pro (Annual) | 1 year | **from Play — TBD** | Create before implementation |
+| `pro_monthly` | BolSaaf Pro | 1 month | ₹79 launch price | Create in Play Console before implementation |
+| `pro_annual` | BolSaaf Pro (Annual) | 1 year | ₹599 launch price | Create in Play Console before implementation |
 
 Rules:
 
@@ -48,11 +48,11 @@ Server returns an `entitlements` object on `/voice/auth/me/` (see §4). The clie
 
 | Entitlement key | Type | Free | Pro (Monthly / Annual) | Notes |
 |---|---|---|---|---|
-| `voice_minutes_monthly` | int \| null | small configurable quota | `null` (= unlimited) | `null` means unlimited; never a sentinel like `-1` |
+| `voice_minutes_monthly` | int \| null | `20` | `null` (= unlimited) | `null` means unlimited; never a sentinel like `-1` |
 | `cleaning_modes` | string[] | `["basic","standard"]` | `["basic","standard","studio","pro"]` | `studio`/`pro` = DeepFilterNet quality |
 | `video_processing` | bool | `true` (capped) | `true` | Free may use video but with caps below |
 | `video_export_watermark` | bool | `true` | `false` | Pro exports clean video |
-| `video_minutes_monthly` | int \| null | small configurable cap | `null` | Applies to video jobs |
+| `video_minutes_monthly` | int \| null | `10` | `60` | Applies to video jobs; expand after usage review |
 | `max_audio_upload_mb` | int | `25` | `100` | Client currently caps at 25 MB (`FASTLIB_MAX_AUDIO_BYTES`) |
 | `max_video_upload_mb` | int | `50` | `250` | Client currently caps at 50 MB (`FASTLIB_MAX_VIDEO_BYTES`) |
 | `reel_presets` | string[] | basic set | full set (`Podcast`, `Rain`, `Cafe`, `Viral`) | Server-defined preset names |
@@ -70,7 +70,7 @@ Server returns an `entitlements` object on `/voice/auth/me/` (see §4). The clie
 ### Free quota semantics
 
 - Free quota is per calendar month, keyed by `free_period_yyyymm` (already in the model + server reset logic in `auth_views._maybe_reset_period`).
-- Real values for the two `Free` quota cells are an owner decision; they are config on the server (`VoiceUser.free_quota_minutes`), not client constants. The client's hardcoded fallback (`FREE_QUOTA_MINUTES = 8` in `MainActivity`) must be replaced by the server value once signed in.
+- Free launch values are config on the server (`VoiceUser.free_quota_minutes`), not client constants: 20 audio minutes and 10 video minutes per calendar month. The client's hardcoded fallback (`FREE_QUOTA_MINUTES = 8` in `MainActivity`) must be replaced by the server value once signed in.
 - Pro users never consume quota (`ConsumeQuotaView` already short-circuits on `is_pro`).
 
 ---
@@ -329,9 +329,9 @@ Play pushes to a Pub/Sub topic for: renewal, cancel, expire, revoke. For MVP ski
 
 ---
 
-## 10. Implementation readiness (prepared — do NOT start until pricing + quotas land)
+## 10. Implementation readiness (approved launch decisions)
 
-When the owner supplies pricing and Free quota values, execute in this order. Nothing here runs before then.
+Launch decisions are now set: ₹79/month, ₹599/year, 20 free audio minutes/month, 10 free video minutes/month, and 60 Pro video minutes/month. Execute the implementation in this order.
 
 1. **Play Console:** create base plans for `pro_monthly` and `pro_annual` with the finalized prices/offers. Product IDs are immutable.
 2. **Server schema:** add the `VoiceUser` fields in §3 (`subscription_product_id`, `subscription_state`, `auto_renewing`, `last_verified_at`, `purchase_token_hash`) via migration; derive `is_pro` from `pro_expires_at` at read time.
