@@ -200,6 +200,7 @@ fun HomeScreen(
     onPlayReelVariant: (String) -> Unit = {},
     onShareReelVariant: (String) -> Unit = {},
     onDownloadReelVariant: (String) -> Unit = {},
+    onVideoExported: (String) -> Unit = {},
     onOpenSettings: () -> Unit = {}
 ) {
     var feedbackPair by remember { mutableStateOf<AudioPair?>(null) }
@@ -280,7 +281,10 @@ fun HomeScreen(
             }
             videoExportProgress = null
             result
-                .onSuccess { fileName -> onShareFile(fileName) }
+                .onSuccess { fileName ->
+                    onVideoExported(fileName)
+                    onShareFile(fileName)
+                }
                 .onFailure { err -> videoExportError = err.message ?: "Video export failed" }
         }
     }
@@ -438,7 +442,10 @@ fun HomeScreen(
             beforeAfterInFlight = false
             beforeAfterProgress = null
             result
-                .onSuccess { fileName -> onShareFile(fileName) }
+                .onSuccess { fileName ->
+                    onVideoExported(fileName)
+                    onShareFile(fileName)
+                }
                 .onFailure { err -> beforeAfterError = err.message ?: "Video export failed" }
         }
     }

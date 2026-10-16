@@ -392,6 +392,7 @@ class MainActivity : ComponentActivity() {
                         onStartRecording = {
                             if (isRecording) stopRecording() else showRecordFormatSheet = true
                         },
+                        onVideoExported = { fileName -> onExternalVideoExported(fileName) },
                         onStopRecording = { stopRecording() },
                         onUploadFile = { openUploadPicker() },
                         onVideoUpload = { openVideoPickerDirect() },
@@ -530,6 +531,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onCleaningPresetChange = { cleaningPreset = it },
                         onStartRecording = { startRecording() },
+                        onVideoExported = { fileName -> onExternalVideoExported(fileName) },
                         onStopRecording = { stopRecording() },
                         onUploadFile = { openUploadPicker() },
                         onVideoUpload = { openVideoPickerDirect() },
@@ -1328,29 +1330,48 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Add audio pair (Original + Cleaned together)
+    // Add audio pair (Original + Cleaned together) and consume quota for its duration.
     private fun addAudioPair(timestamp: String, originalFile: File, cleanedFile: File, isRecording: Boolean = true) {
-        val time = getCurrentTimeFormatted()
         val durSec = mediaDurationSec(cleanedFile)
         consumeQuotaSeconds(durSec)
+        recordHistoryPair(timestamp, originalFile.name, cleanedFile.name, isRecording, durSec)
+        noteCleanForStreak()
+    }
+
+    /**
+     * Add an entry to the History / Recent Cleans list WITHOUT consuming quota.
+     * Used for derived outputs: extra reel variants and Home video exports.
+     */
+    private fun recordHistoryPair(
+        timestamp: String,
+        originalFileName: String,
+        cleanedFileName: String,
+        isRecording: Boolean,
+        durationSec: Float
+    ) {
         val pair = AudioPair(
             timestamp = timestamp,
-            time = time,
-            originalFile = originalFile.name,
-            cleanedFile = cleanedFile.name,
+            time = getCurrentTimeFormatted(),
+            originalFile = originalFileName,
+            cleanedFile = cleanedFileName,
             isRecording = isRecording,
-            durationSec = durSec
+            durationSec = durationSec
         )
-        // Remove any existing pair with same timestamp
         audioPairsList.removeAll { it.timestamp == timestamp }
-        // Add new pair at the beginning
         audioPairsList.add(0, pair)
-        // Keep only the most recent entries
         while (audioPairsList.size > HistoryStore.MAX_ITEMS) {
             audioPairsList.removeAt(audioPairsList.size - 1)
         }
         persistHistory()
-        noteCleanForStreak()
+    }
+
+    /** Register a Home-exported video (waveform / before-after) in History without extra quota. */
+    private fun onExternalVideoExported(fileName: String) {
+        val dir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "ReelVoice")
+        val file = File(dir, fileName)
+        if (!file.exists()) return
+        val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        recordHistoryPair(ts, fileName, fileName, isRecording = false, durationSec = mediaDurationSec(file))
     }
 
     private fun noteCleanForStreak() {
@@ -1717,6 +1738,20 @@ class MainActivity : ComponentActivity() {
                     )
                     currentProcessedPair = pair
                     addAudioPair(timestamp, originalFile, outFile, isRecording = false)
+                    // Option 2: surface every reel variant as its own History item (no extra quota).
+                    if (flowSnapshot == ProcessingFlow.REEL_MODE && latestReelVariantFiles.isNotEmpty()) {
+                        latestReelVariantFiles.forEach { (variant, fileName) ->
+                            if (fileName != outFile.name) {
+                                recordHistoryPair(
+                                    "${timestamp}_$variant",
+                                    originalFile.name,
+                                    fileName,
+                                    false,
+                                    dSec
+                                )
+                            }
+                        }
+                    }
                     showSuccess = true
                     lastSaveInfo = SaveInfo(outFile.name, dSec, timestamp)
                     Toast.makeText(this, "Done (${flowSnapshot.name}) · ${"%.1f".format(dSec)}s", Toast.LENGTH_LONG).show()
