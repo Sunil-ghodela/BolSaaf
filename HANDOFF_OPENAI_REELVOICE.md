@@ -1,4 +1,23 @@
-# ReelVoice — Handoff (updated 2026-10-15, post E2E session)
+# ReelVoice — Handoff (updated 2026-10-16, coordinated status)
+
+## Latest coordinated status
+
+- Deep bhai's latest Android changes are present on `main` in commit `613ef12`.
+- The Lab/DEV tab has been removed from the Android UI.
+- The refreshed iOS-style adaptive app icon has been added to the Android launcher.
+- These UI/branding changes are complete; do not re-introduce the Lab/DEV surface while adding the next features.
+- Subscription is **not production-ready yet**: the client-side validation stub remains and must be replaced with server-confirmed entitlements.
+- Video entry points exist in the app, but the complete device E2E flow and failure/retry behavior are still pending.
+
+## Next coordinated flow
+
+1. Keep the Android UI cleanup limited to the remaining design polish and consistent audio/video feature presentation.
+2. Finish the billing contract and server validation before exposing paid video/background limits.
+3. Complete Quick Clean, Extract Voice, Reel V1/V2, Video Processing, and retry/offline E2E checks.
+4. Audit the iOS build/review result and reuse the approved new logo asset for the follow-up update.
+5. Prepare the ReelVoice landing page with matching audio/video positioning, pricing, and store/deep links.
+
+The landing page and iOS update should consume the same feature and entitlement names defined by the billing contract; avoid maintaining separate pricing or capability definitions.
 
 ## Objective
 
