@@ -19,8 +19,9 @@ import com.android.billingclient.api.QueryPurchasesParams
  * Phase 3 — Google Play Billing client for the Pro subscription.
  *
  * Product catalogue (Play Console):
- *   - `pro_monthly` — Pro tier monthly subscription (₹199 or market-localised).
- *   - `pro_yearly`  — (planned) ~₹1,499 or localised. Not yet offered in-app.
+ *   - `pro_monthly` — Pro tier monthly subscription.
+ *   - `pro_annual`  — Pro tier annual subscription (same entitlements, yearly billing).
+ *     Display prices are always read from Play `ProductDetails`, never hardcoded.
  *
  * Purchase flow:
  *   1. connect() — binds to Play services.
@@ -45,11 +46,13 @@ class BillingManager(
     companion object {
         private const val TAG = "BillingManager"
 
-        /** Must match the subscription product id configured in Play Console → Monetization → Subscriptions. */
+        /** Must match the subscription product ids configured in Play Console → Monetization → Subscriptions. */
         const val PRODUCT_PRO_MONTHLY = "pro_monthly"
+        const val PRODUCT_PRO_ANNUAL = "pro_annual"
     }
 
     private var proMonthlyDetails: ProductDetails? = null
+    private var proAnnualDetails: ProductDetails? = null
 
     private val purchasesUpdatedListener = PurchasesUpdatedListener { result, purchases ->
         when (result.responseCode) {
@@ -108,7 +111,13 @@ class BillingManager(
         if (billingClient.isReady) billingClient.endConnection()
     }
 
-    /** Cached ProductDetails so the UI can show a real localised price ("₹199 / month"). */
+    /** Cached ProductDetails so the UI can show a real localised price (e.g. "₹79 / month"). */
+    fun proDetails(productId: String = PRODUCT_PRO_MONTHLY): ProductDetails? = when (productId) {
+        PRODUCT_PRO_ANNUAL -> proAnnualDetails
+        else -> proMonthlyDetails
+    }
+
+    @Deprecated("Use proDetails(productId)", ReplaceWith("proDetails()"))
     fun proMonthlyDetails(): ProductDetails? = proMonthlyDetails
 
     /** Pulls Pro subscription ProductDetails from Play. */
@@ -119,6 +128,10 @@ class BillingManager(
                     QueryProductDetailsParams.Product.newBuilder()
                         .setProductId(PRODUCT_PRO_MONTHLY)
                         .setProductType(BillingClient.ProductType.SUBS)
+                        .build(),
+                    QueryProductDetailsParams.Product.newBuilder()
+                        .setProductId(PRODUCT_PRO_ANNUAL)
+                        .setProductType(BillingClient.ProductType.SUBS)
                         .build()
                 )
             )
@@ -128,8 +141,12 @@ class BillingManager(
             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                 val products = productDetailsResult.productDetailsList
                 proMonthlyDetails = products.firstOrNull { it.productId == PRODUCT_PRO_MONTHLY }
+                proAnnualDetails = products.firstOrNull { it.productId == PRODUCT_PRO_ANNUAL }
                 if (proMonthlyDetails == null) {
                     Log.w(TAG, "Pro monthly product not found in Play response")
+                }
+                if (proAnnualDetails == null) {
+                    Log.w(TAG, "Pro annual product not found in Play response")
                 }
             } else {
                 Log.w(TAG, "queryProductDetailsAsync failed: ${result.debugMessage}")
@@ -139,8 +156,8 @@ class BillingManager(
     }
 
     /** Call from an Activity to open the Play purchase UI. [connect] must have completed first. */
-    fun launchPurchaseFlow(activity: Activity): Boolean {
-        val details = proMonthlyDetails ?: run {
+    fun launchPurchaseFlow(activity: Activity, productId: String = PRODUCT_PRO_MONTHLY): Boolean {
+        val details = proDetails(productId) ?: run {
             onPurchaseError(-1, "Pricing not available yet — please retry in a moment.")
             return false
         }
