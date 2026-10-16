@@ -5,6 +5,7 @@
 ## Status of this document
 
 - **Structure and launch decisions approved by the owner (2026-10-16).** Implementation can proceed against this revision.
+- **Implemented (2026-10-16):** server endpoints (`/voice/billing/validate/`, `/voice/billing/entitlements/`, `/voice/billing/plans/`) + `VoiceUser` subscription fields + client server-validated flow + catalogue-driven plan UI. Remaining external setup: Play Console base plans and the Play service account.
 - **Implementation remains server-first:** do NOT ship client-only Pro unlocks; Play Console prices and server entitlements remain authoritative.
 - **`pro_annual` is canonical** for the yearly product. The old `pro_yearly` was a placeholder only.
 - **Pricing is not hardcoded in the app.** Play Console base plans hold the launch amounts and `ProductDetails` renders the runtime price. Approved launch prices are ₹79/month and ₹599/year; introductory offers are off for launch.
@@ -329,7 +330,9 @@ Play pushes to a Pub/Sub topic for: renewal, cancel, expire, revoke. For MVP ski
 
 ---
 
-## 10. Implementation readiness (approved launch decisions)
+## 10. Implementation readiness (implemented — pending Play Console + service account)
+
+> **Status (2026-10-16):** steps 2–7 are implemented and verified (server + Android client). Steps 1 and 8 remain: the Play Console base plans and the Google service account are external setup, plus a license-tester purchase to close the loop.
 
 Launch decisions are now set: ₹79/month, ₹599/year, 20 free audio minutes/month, 10 free video minutes/month, and 60 Pro video minutes/month. Execute the implementation in this order.
 

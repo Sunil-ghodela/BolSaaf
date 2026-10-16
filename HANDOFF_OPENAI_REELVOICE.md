@@ -9,6 +9,29 @@
 - Subscription is **not production-ready yet**: the client-side validation stub remains and must be replaced with server-confirmed entitlements.
 - Video entry points exist in the app, but the complete device E2E flow and failure/retry behavior are still pending.
 
+## Billing implementation status (2026-10-16)
+
+Server-side Play validation and the client server-validated flow are **implemented and verified** on branch `feature/reelvoice-product-plan`.
+
+- **Backend** (`/var/www/simplelms/backend`, committed locally on the server — remote is unreachable):
+  - `VoiceUser` gained `subscription_product_id`, `subscription_state`, `auto_renewing`, `last_verified_at`, `purchase_token_hash` (migration `0009`).
+  - `POST /voice/billing/validate/` verifies Play tokens via androidpublisher v3, persists the period, acks.
+  - `GET /voice/billing/entitlements/` and public `GET /voice/billing/plans/` (Free + Pro catalogue, one shared vocabulary).
+  - `/voice/auth/me/` now returns `plan`, `auto_renewing`, `entitlements`; `is_pro` is derived from `pro_expires_at`.
+  - Verified live: entitlements in `/me/`, `service_account_missing` 502 for fake tokens, `product_mismatch` 400.
+- **Android client** (`BolSaaf`):
+  - `AuthApi` — `Entitlements`, `PlanCatalog`, `validatePurchase()`; `AuthUser` carries plan/autoRenewing/entitlements.
+  - `MainActivity.validatePurchaseWithServer` now POSTs the token to the server then re-hydrates `/auth/me/` — **the client-only Pro unlock stub is removed**.
+  - `BillingManager` — `pro_annual` added, multi-product query, `proDetails(productId)`.
+  - `ProfileScreen` — plan dialog renders Free/Pro tiers from the server catalogue; price from Play `ProductDetails` (no hardcoded prices/limits).
+  - Verified on emulator: app builds, quota loads from server, plan dialog shows correct Free/Pro tiers.
+
+### Still required before Pro can be sold
+
+1. Create `pro_monthly` + `pro_annual` base plans in Play Console (₹79/mo, ₹599/yr per contract).
+2. Install the Google Play service account at `/var/secrets/bolsaaf-play-sa.json` and grant Play API access.
+3. End-to-end test with a license-tester purchase.
+
 ## Next coordinated flow
 
 0. **Contract first:** `BILLING_CONTRACT.md` rev 2 is on branch `feature/reelvoice-product-plan` and open for approval. It defines the Free / Pro Monthly / Pro Annual matrix, audio-video entitlements, server validation, restore, expiry, and cancellation, with **no hardcoded pricing**. Billing implementation starts only after this contract is approved.
