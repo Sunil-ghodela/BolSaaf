@@ -24,6 +24,7 @@ import com.reelvoice.ui.screens.HistoryScreen
 import com.reelvoice.ui.screens.LiveScreen
 import com.reelvoice.ui.screens.SaveInfo
 import com.reelvoice.audio.AudioProcessor
+import com.reelvoice.history.HistoryStore
 import com.reelvoice.audio.AuthApi
 import com.reelvoice.audio.CleaningPreset
 import com.reelvoice.audio.VoiceApiPhase2Client
@@ -136,6 +137,7 @@ class MainActivity : ComponentActivity() {
         )
     }
     private val authApi = AuthApi()
+    private val historyStore by lazy { HistoryStore(this) }
     private var fastLibInputUri by mutableStateOf<Uri?>(null)
     private var fastLibInputIsVideo by mutableStateOf(false)
     private var fastLibInputLabel by mutableStateOf<String?>(null)
@@ -318,6 +320,7 @@ class MainActivity : ComponentActivity() {
         voiceApi = VoiceCleaningApi()
         voiceApiPhase2 = VoiceApiPhase2Client()
         freeMinutesLeft = loadFreeMinutes()
+        restoreHistory()
         restoreAuthSession()
         refreshVoiceApiCapabilities()
         // Initialise Google Mobile Ads on a background thread (per AdMob guidance).
@@ -747,7 +750,8 @@ class MainActivity : ComponentActivity() {
         )
         audioPairsList.removeAll { it.timestamp == ts }
         audioPairsList.add(0, pair)
-        while (audioPairsList.size > 10) audioPairsList.removeAt(audioPairsList.lastIndex)
+        while (audioPairsList.size > HistoryStore.MAX_ITEMS) audioPairsList.removeAt(audioPairsList.lastIndex)
+        persistHistory()
         lastSaveInfo = SaveInfo(file.name, pair.durationSec, ts)
         showSuccess = true
         Toast.makeText(this, "Video saved: ${file.name}", Toast.LENGTH_SHORT).show()
@@ -1341,10 +1345,11 @@ class MainActivity : ComponentActivity() {
         audioPairsList.removeAll { it.timestamp == timestamp }
         // Add new pair at the beginning
         audioPairsList.add(0, pair)
-        // Keep only last 10 pairs
-        while (audioPairsList.size > 10) {
+        // Keep only the most recent entries
+        while (audioPairsList.size > HistoryStore.MAX_ITEMS) {
             audioPairsList.removeAt(audioPairsList.size - 1)
         }
+        persistHistory()
         noteCleanForStreak()
     }
 
@@ -1409,6 +1414,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Restore the History / Recent Cleans list from disk, dropping entries whose files are gone. */
+    private fun restoreHistory() {
+        runCatching {
+            val recDir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "ReelVoice")
+            val restored = historyStore.load().filter {
+                File(recDir, it.cleanedFile).exists() || File(recDir, it.originalFile).exists()
+            }
+            audioPairsList.clear()
+            audioPairsList.addAll(restored)
+        }
+    }
+
+    /** Persist the current history/Recent Cleans list to disk (best-effort). */
+    private fun persistHistory() {
+        historyStore.save(audioPairsList)
+    }
+
     private fun totalProcessedMinutes(): Float =
         (getAudioPairs().sumOf { it.durationSec.toDouble() } / 60.0).toFloat()
 
@@ -1422,6 +1444,7 @@ class MainActivity : ComponentActivity() {
             File(outputDir, pair.cleanedFile).delete()
             // Remove from list
             audioPairsList.remove(pair)
+            persistHistory()
             Toast.makeText(this, "Files deleted", Toast.LENGTH_SHORT).show()
         }
     }

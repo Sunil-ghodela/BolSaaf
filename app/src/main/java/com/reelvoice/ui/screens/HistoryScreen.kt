@@ -1,5 +1,7 @@
 package com.reelvoice.ui.screens
 
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -29,6 +31,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,11 +41,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reelvoice.ui.components.BottomNavBar
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -388,12 +395,30 @@ private fun HistoryMediaRow(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (video) Icons.Filled.Star else Icons.Filled.PlayArrow,
-                    contentDescription = null,
-                    tint = onPrimary,
-                    modifier = Modifier.size(26.dp)
-                )
+                if (video && cleaned.exists()) {
+                    HistoryVideoThumbnail(cleaned)
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.45f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                } else {
+                    Icon(
+                        imageVector = if (video) Icons.Filled.Star else Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = onPrimary,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -520,4 +545,36 @@ private fun formatDuration(sec: Float): String {
     val m = s / 60
     val r = s % 60
     return "%d:%02d".format(Locale.US, m, r)
+}
+
+/**
+ * Renders the first synced frame of a video file as a thumbnail.
+ * Decoding runs off the main thread; audio rows fall back to an icon.
+ */
+@Composable
+private fun HistoryVideoThumbnail(file: File) {
+    var bitmap by remember(file.absolutePath) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(file.absolutePath) {
+        bitmap = withContext(Dispatchers.IO) {
+            runCatching {
+                android.media.MediaMetadataRetriever().let { r ->
+                    r.setDataSource(file.absolutePath)
+                    val frame = r.getFrameAtTime(
+                        1_000_000L,
+                        android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                    )
+                    r.release()
+                    frame
+                }
+            }.getOrNull()
+        }
+    }
+    bitmap?.let {
+        Image(
+            bitmap = it.asImageBitmap(),
+            contentDescription = "Video thumbnail",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+    }
 }
