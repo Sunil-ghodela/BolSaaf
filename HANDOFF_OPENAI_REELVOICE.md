@@ -107,3 +107,17 @@ Test plan: `MOBILE_E2E_TEST_PLAN.md`. Verified so far: health, backgrounds, add_
 
 - SSH: `ssh root@77.237.234.45`; voice backend: `/var/www/simplelms/backend`; nginx vhosts `selfshadowwork` (legacy domain) + `voice.tranquilwaters.in` (new); services `voice-gunicorn`, `voice-celery`; logs `/var/log/voice-gunicorn.{access,error}.log`, `/var/log/voice-celery.log`.
 - Full map: `SERVER_FLOW.md` (mostly still accurate; domain caveat above).
+
+---
+
+## Video history / list — persistence (2026-10-16, branch `feature/video-history-persistence`)
+
+Option 1 of the video backlog: make the History / Recent Cleans list actually retain video (and audio) outputs, with real video thumbnails.
+
+- **New `history/HistoryStore.kt`** — serializes the history list to `filesDir/reelvoice_history.json` (cap 50). The list used to be in-memory only, so every output vanished on restart even though the files were still on disk.
+- **`MainActivity`** — `restoreHistory()` on launch (drops entries whose files are gone), `persistHistory()` after every add/remove; the 10-item cap is raised to 50 via `HistoryStore.MAX_ITEMS`.
+- **`HistoryScreen`** — video rows now render a real first-frame thumbnail (`MediaMetadataRetriever`, off-main-thread) with a play overlay; audio rows keep the icon.
+
+**Verified on emulator:** seeded a `screenrecord` mp4 + existing wav outputs into the ReelVoice dir; after a fresh install + force-stop + relaunch, History loaded all entries from disk and showed the video's real thumbnail; deleting a row updated both the JSON and the file on disk.
+
+**Branching:** this lives on `feature/video-history-persistence` (based on `main`) so it can merge independently of the billing work on `feature/reelvoice-product-plan`; both touch different regions of `MainActivity.kt`.
