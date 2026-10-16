@@ -37,17 +37,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.reelvoice.BuildConfig
 import com.reelvoice.ui.theme.BackgroundCard
 import com.reelvoice.ui.theme.NavUnselected
 import com.reelvoice.ui.theme.SliderTrackStrong
 import com.reelvoice.ui.theme.ThemeRed
 
 /**
- * 5-tab bottom navigation shared by app screens.
+ * 4-tab bottom navigation shared by app screens (Lab/DEV tab removed 2026-10-16).
  *
  * Tab indices:
- *   0 Home, 1 Live, 2 History, 3 Profile, 4 Lab.
+ *   0 Home, 1 Live, 2 History, 3 Profile.
  *
  * Kept in ui.components so each screen imports a single source of truth.
  */
@@ -105,16 +104,6 @@ fun BottomNavBar(
                 isSelected = selectedTab == 3,
                 onClick = { onTabSelected(3) }
             )
-            if (BuildConfig.DEBUG) {
-                NavItem(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Build,
-                    label = "Lab",
-                    badge = "DEV",
-                    isSelected = selectedTab == 4,
-                    onClick = { onTabSelected(4) }
-                )
-            }
         }
     }
 }

@@ -36,7 +36,6 @@ import com.reelvoice.audio.ProcessingQualityGuard
 import com.reelvoice.audio.VoiceBackground
 import com.reelvoice.audio.VoiceCleaningApi
 import com.reelvoice.ui.screens.CleanItem
-import com.reelvoice.ui.screens.FastLibTestScreen
 import com.reelvoice.ui.screens.HomeScreen
 import com.reelvoice.ui.screens.ProfileScreen
 import com.reelvoice.ui.screens.SettingsDialog
@@ -501,25 +500,6 @@ class MainActivity : ComponentActivity() {
                         onRegister = { email, password, name -> handleRegister(email, password, name) },
                         onPasswordReset = { email -> handlePasswordReset(email) },
                         onLogout = { handleLogout() }
-                    )
-                    4 -> FastLibTestScreen(
-                        selectedTab = selectedTab,
-                        recordingsDir = recDir,
-                        selectedFileLabel = fastLibInputLabel,
-                        isVideoInput = fastLibInputIsVideo,
-                        isCleaning = fastLibIsCleaning,
-                        stage = fastLibStage,
-                        progressPct = fastLibProgress,
-                        outputs = fastLibOutputs.toList(),
-                        maxAudioMb = (FASTLIB_MAX_AUDIO_BYTES / 1024 / 1024).toInt(),
-                        maxVideoMb = (FASTLIB_MAX_VIDEO_BYTES / 1024 / 1024).toInt(),
-                        onUploadAudio = { openFastAudioPicker() },
-                        onUploadVideo = { openFastVideoPicker() },
-                        onStartCleaning = { startFastLibTestCleaning() },
-                        onPlayOutput = { name -> playAudioFile(name) },
-                        onShareOutput = { name -> shareFile(name) },
-                        onSaveOutput = { name -> downloadFile(name) },
-                        onTabSelected = { tab -> selectedTab = tab }
                     )
                     else -> HomeScreen(
                         recordingsDir = recDir,
