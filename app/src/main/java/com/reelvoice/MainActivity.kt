@@ -115,6 +115,11 @@ class MainActivity : ComponentActivity() {
     private var userHandle by mutableStateOf("@reelvoice")
     private var isProMember by mutableStateOf(false)
     private var isPurchaseInProgress by mutableStateOf(false)
+    private var proEntitlements by mutableStateOf(AuthApi.Entitlements.FREE_DEFAULT)
+    private var proPlan by mutableStateOf<String?>(null)
+    private var proAutoRenewing by mutableStateOf(false)
+    private var proMonthlyPrice by mutableStateOf("—")
+    private var proAnnualPrice by mutableStateOf("—")
 
     private val billingManager by lazy {
         com.reelvoice.billing.BillingManager(
@@ -329,6 +334,10 @@ class MainActivity : ComponentActivity() {
         // from a prior session (e.g. user reinstalled, switched devices).
         billingManager.connect {
             billingManager.refreshActivePurchases()
+            runOnUiThread {
+                proMonthlyPrice = priceLabelFor(com.reelvoice.billing.BillingManager.PRODUCT_PRO_MONTHLY)
+                proAnnualPrice = priceLabelFor(com.reelvoice.billing.BillingManager.PRODUCT_PRO_ANNUAL)
+            }
         }
 
         checkPermissions()
@@ -494,6 +503,9 @@ class MainActivity : ComponentActivity() {
                         userEmail = userEmail,
                         isLoggedIn = isUserLoggedIn,
                         showProMemberBadge = isProMember,
+                        proMonthlyPrice = proMonthlyPrice,
+                        proAnnualPrice = proAnnualPrice,
+                        entitlements = proEntitlements,
                         onUpgrade = { startProPurchase() },
                         onOpenSettings = { showSettingsDialog() },
                         onLogin = { email, password -> handleLogin(email, password) },
@@ -695,22 +707,59 @@ class MainActivity : ComponentActivity() {
      * Server handshake after a successful Play purchase. The Play purchase token alone does NOT
      * grant Pro — the server validates it with Play Developer API and sets pro_expires_at.
      *
-     * Endpoint contract: see BILLING_CONTRACT.md.
-     * Until the backend endpoint lands, this is a TODO stub that just flips local state so the
-     * user sees Pro in-app. That is fine for closed-testing (license testers) — DO NOT ship this
-     * code path to production without the server check, or anyone with a modified APK can set
-     * is_pro locally.
+     * Endpoint contract: see BILLING_CONTRACT.md. Pro is only granted when the server confirms;
+     * we never flip [isProMember] locally.
      */
+    /** Localized Play price for a subscription product (e.g. "₹79"), or "—" if not loaded yet. */
+    private fun priceLabelFor(productId: String): String {
+        val details = billingManager.proDetails(productId) ?: return "—"
+        return details.subscriptionOfferDetails
+            ?.firstOrNull()
+            ?.pricingPhases
+            ?.pricingPhaseList
+            ?.firstOrNull()
+            ?.formattedPrice
+            ?: "—"
+    }
+
     private fun validatePurchaseWithServer(productId: String, purchaseToken: String) {
-        android.util.Log.i(
-            "ReelVoiceBilling",
-            "TODO: POST /voice/billing/validate/ {product=$productId, token=${purchaseToken.take(12)}…}"
-        )
-        runOnUiThread {
-            isPurchaseInProgress = false
-            isProMember = true
-            Toast.makeText(this, "Welcome to Pro ✨", Toast.LENGTH_LONG).show()
+        val token = savedAuthToken()
+        if (token.isNullOrBlank()) {
+            runOnUiThread {
+                isPurchaseInProgress = false
+                Toast.makeText(this, "Please sign in to activate Pro.", Toast.LENGTH_LONG).show()
+            }
+            return
         }
+        Thread {
+            try {
+                val result = authApi.validatePurchase(token, productId, purchaseToken)
+                if (result.ok && result.isPro) {
+                    // Re-hydrate the profile so entitlements + quota flow to the UI.
+                    val me = runCatching { authApi.me(token) }.getOrNull()
+                    runOnUiThread {
+                        isPurchaseInProgress = false
+                        if (me != null) applyAuthUserToUi(me) else isProMember = true
+                        Toast.makeText(this, "Welcome to Pro ✨", Toast.LENGTH_LONG).show()
+                    }
+                } else {
+                    runOnUiThread {
+                        isPurchaseInProgress = false
+                        val why = result.reason ?: result.status
+                        Toast.makeText(
+                            this,
+                            "Couldn't verify purchase ($why). If you were charged, contact support.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    isPurchaseInProgress = false
+                    Toast.makeText(this, "Verification failed — please retry.", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
     }
 
     private fun checkPermissions() {
@@ -802,6 +851,9 @@ class MainActivity : ComponentActivity() {
         userDisplayName = user.displayName.ifBlank { user.email.substringBefore("@") }
         userHandle = user.handle.ifBlank { "@" + user.email.substringBefore("@").take(10) }
         isProMember = user.isPro
+        proEntitlements = user.entitlements
+        proPlan = user.plan
+        proAutoRenewing = user.autoRenewing
         // Server quota is the source of truth once signed in.
         freeMinutesLeft = user.freeMinutesLeft
         quotaPrefs().edit()
@@ -817,10 +869,12 @@ class MainActivity : ComponentActivity() {
         userDisplayName = "You"
         userHandle = "@reelvoice"
         isProMember = false
+        proEntitlements = AuthApi.Entitlements.FREE_DEFAULT
+        proPlan = null
+        proAutoRenewing = false
     }
 
-    /** On app start, if we have a stored token, fetch /auth/me/ to refresh quota + pro status. */
-    private fun restoreAuthSession() {
+    /** On app start, if we have a stored token, fetch /auth/me/ to refresh quota + pro status. */    private fun restoreAuthSession() {
         val token = savedAuthToken() ?: return
         Thread {
             try {

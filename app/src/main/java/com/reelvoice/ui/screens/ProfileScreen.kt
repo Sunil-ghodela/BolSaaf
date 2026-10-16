@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.reelvoice.audio.AuthApi
 import com.reelvoice.audio.CleaningPreset
 import com.reelvoice.ui.animation.MD3Motion
 import com.reelvoice.ui.components.BottomNavBar
@@ -57,6 +58,11 @@ fun ProfileScreen(
     userEmail: String? = null,
     isLoggedIn: Boolean = false,
     showProMemberBadge: Boolean = false,
+    proMonthlyPrice: String = "—",
+    proAnnualPrice: String = "—",
+    proMonthlyPriceSuffix: String = "/month",
+    proAnnualPriceSuffix: String = "/year",
+    entitlements: AuthApi.Entitlements = AuthApi.Entitlements.FREE_DEFAULT,
     onUpgrade: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onLogin: (String, String) -> Unit = { _, _ -> },
@@ -473,6 +479,11 @@ fun ProfileScreen(
                 freeQuotaMinutes = freeQuotaMinutes,
                 isProMember = showProMemberBadge,
                 renewalLabel = renewalLabel,
+                proMonthlyPrice = proMonthlyPrice,
+                proAnnualPrice = proAnnualPrice,
+                proMonthlyPriceSuffix = proMonthlyPriceSuffix,
+                proAnnualPriceSuffix = proAnnualPriceSuffix,
+                entitlements = entitlements,
                 onDismiss = { showPlanDialog = false },
                 onUpgrade = {
                     showPlanDialog = false
@@ -632,6 +643,11 @@ fun PlanDialog(
     freeQuotaMinutes: Int,
     isProMember: Boolean,
     renewalLabel: String,
+    proMonthlyPrice: String = "—",
+    proAnnualPrice: String = "—",
+    proMonthlyPriceSuffix: String = "/month",
+    proAnnualPriceSuffix: String = "/year",
+    entitlements: AuthApi.Entitlements = AuthApi.Entitlements.FREE_DEFAULT,
     onDismiss: () -> Unit,
     onUpgrade: () -> Unit
 ) {
@@ -728,15 +744,16 @@ fun PlanDialog(
                 // Free plan card
                 PlanCard(
                     title = "Free",
-                    price = "₹0",
-                    priceSuffix = "/month",
+                    price = "Free",
+                    priceSuffix = "",
                     isCurrent = !isProMember,
                     accentColor = MaterialTheme.colorScheme.primary,
-                    bullets = listOf(
-                        "$freeQuotaMinutes min voice cleaning / month",
-                        "Basic + standard cleaning modes",
-                        "Cloud + on-device processing",
-                        "Video audio clean (up to 50 MB)"
+                    bullets = listOfNotNull(
+                        entitlements.voiceMinutesMonthly?.let { "$it min voice cleaning / month" }
+                            ?: "Unlimited voice cleaning",
+                        "${entitlements.cleaningModes.joinToString(" · ") { it.replaceFirstChar(Char::uppercase) }} cleaning modes",
+                        "Video clean up to ${entitlements.maxVideoUploadMb} MB",
+                        entitlements.videoMinutesMonthly?.let { "$it min video / month" }
                     )
                 )
 
@@ -745,19 +762,19 @@ fun PlanDialog(
                 // Pro plan card
                 PlanCard(
                     title = "Pro",
-                    price = "₹299",
-                    priceSuffix = "/month",
+                    price = proMonthlyPrice,
+                    priceSuffix = proMonthlyPriceSuffix,
                     isCurrent = isProMember,
                     accentColor = MaterialTheme.colorScheme.tertiary,
                     isHighlighted = true,
-                    bullets = listOf(
+                    bullets = listOfNotNull(
                         "Unlimited voice cleaning",
-                        "Studio + Pro cleaning modes (DeepFilterNet)",
-                        "FastLib lab access",
-                        "Priority processing queue",
-                        "Video export without watermark",
-                        "Reel presets: Podcast, Rain, Cafe, Viral",
-                        "Ad-free"
+                        "${entitlements.cleaningModes.joinToString(" · ") { it.replaceFirstChar(Char::uppercase) }} cleaning modes",
+                        entitlements.videoMinutesMonthly?.let { "Up to $it min video / month" },
+                        "Reel presets: ${entitlements.reelPresets.joinToString(", ")}",
+                        if (!entitlements.videoExportWatermark) "Video export without watermark" else null,
+                        "Priority processing",
+                        if (entitlements.adFree) "Ad-free" else null
                     )
                 )
 
@@ -813,7 +830,9 @@ fun PlanDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "Cancel anytime. Billed monthly.",
+                    text = if (!proAnnualPrice.isNullOrBlank() && proAnnualPrice != "—")
+                        "Cancel anytime. Billed $proMonthlyPriceSuffix. Or $proAnnualPrice$proAnnualPriceSuffix."
+                    else "Cancel anytime. Billed monthly.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.align(Alignment.CenterHorizontally)
