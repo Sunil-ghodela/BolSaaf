@@ -121,3 +121,9 @@ Option 1 of the video backlog: make the History / Recent Cleans list actually re
 **Verified on emulator:** seeded a `screenrecord` mp4 + existing wav outputs into the ReelVoice dir; after a fresh install + force-stop + relaunch, History loaded all entries from disk and showed the video's real thumbnail; deleting a row updated both the JSON and the file on disk.
 
 **Branching:** this lives on `feature/video-history-persistence` (based on `main`) so it can merge independently of the billing work on `feature/reelvoice-product-plan`; both touch different regions of `MainActivity.kt`.
+
+### Options 2 & 3 (2026-10-16)
+
+- **Option 2 — reel variants as History items:** each Reel V2 variant (`clean_only`, `with_bg`, `viral_boosted`) is added as its own History/Recent entry with a unique timestamp (`<ts>_<variant>`). No extra quota is consumed (quota is charged once for the job).
+- **Option 3 — Home video exports in History:** waveform / photo-reel and before-after video exports now register in History via a new `onVideoExported` callback on `HomeScreen`, again without extra quota. `addAudioPair` was split into the quota-consuming `addAudioPair` plus a no-quota `recordHistoryPair`; `onExternalVideoExported` records exported videos.
+- **Verification status:** build passes; both paths are wired into the same success blocks that already drive Share. Full emulator verification of option 3 was **blocked by the emulator's software video encoder**, which hangs after writing ~100% of the MP4 (main thread is idle — the hang is on the `Dispatchers.Default` encode coroutine, confirmed via `/data/anr/trace_00`). The exported MP4 is written to disk but `encode()` never returns, so `onSuccess` never fires. This is an emulator `MediaCodec` (`c2.android.avc.encoder`) issue, not app logic — needs a real-device pass. Option 2 needs a server Reel V2 job, so it was verified by build/inspection only.
