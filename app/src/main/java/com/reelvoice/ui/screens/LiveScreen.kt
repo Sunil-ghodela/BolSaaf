@@ -138,12 +138,14 @@ fun LiveScreen(
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     FormatToggleChip(
-                        label = "🎙️ Audio",
+                        icon = Icons.Filled.Mic,
+                        label = "Audio",
                         isSelected = !isVideoMode,
                         onClick = { onToggleFormat(false) }
                     )
                     FormatToggleChip(
-                        label = "🎬 Video",
+                        icon = Icons.Filled.Videocam,
+                        label = "Video",
                         isSelected = isVideoMode,
                         onClick = { onToggleFormat(true) }
                     )
@@ -446,6 +448,7 @@ fun LiveScreen(
 
 @Composable
 private fun FormatToggleChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     isSelected: Boolean,
     onClick: () -> Unit
@@ -458,14 +461,26 @@ private fun FormatToggleChip(
                 else Color.Transparent,
         shape = RoundedCornerShape(20.dp)
     ) {
-        Text(
-            text = label,
+        Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-        )
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                       else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
