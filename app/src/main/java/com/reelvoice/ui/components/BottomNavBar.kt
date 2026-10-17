@@ -33,14 +33,22 @@ import androidx.compose.animation.core.spring
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.reelvoice.ui.theme.BackgroundCard
 import com.reelvoice.ui.theme.NavUnselected
 import com.reelvoice.ui.theme.SliderTrackStrong
 import com.reelvoice.ui.theme.ThemeRed
+
+/**
+ * Reserve this much bottom padding in a screen's scrollable content so nothing
+ * (e.g. the Live record button) hides behind the floating nav bar.
+ */
+val BottomNavBarBottomPadding: Dp = 116.dp
 
 /**
  * 4-tab bottom navigation shared by app screens (Lab/DEV tab removed 2026-10-16).
@@ -56,8 +64,20 @@ fun BottomNavBar(
     selectedTab: Int = 0,
     onTabSelected: (Int) -> Unit = {}
 ) {
-    Surface(
+    Box(
         modifier = modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        MaterialTheme.colorScheme.background
+                    )
+                )
+            )
+    ) {
+    Surface(
+        modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 10.dp)
             .border(
@@ -66,7 +86,7 @@ fun BottomNavBar(
                 RoundedCornerShape(28.dp)
             ),
         color = BackgroundCard,
-        shadowElevation = 16.dp,
+        shadowElevation = 8.dp,
         tonalElevation = 2.dp,
         shape = RoundedCornerShape(28.dp)
     ) {
@@ -105,6 +125,7 @@ fun BottomNavBar(
                 onClick = { onTabSelected(3) }
             )
         }
+    }
     }
 }
 

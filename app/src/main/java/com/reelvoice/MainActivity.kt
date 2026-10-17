@@ -15,6 +15,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -373,6 +381,12 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                        .windowInsetsPadding(WindowInsets.systemBars)
+                ) {
                 when (selectedTab) {
                     0 -> HomeScreen(
                         recordingsDir = recDir,
@@ -594,6 +608,7 @@ class MainActivity : ComponentActivity() {
                         onShareReelVariant = { fileName -> shareFile(fileName) },
                         onDownloadReelVariant = { fileName -> downloadFile(fileName) }
                     )
+                }
                 }
 
                 // Record format chooser (Audio vs Video)

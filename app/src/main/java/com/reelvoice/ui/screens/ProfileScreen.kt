@@ -135,7 +135,7 @@ fun ProfileScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp)
-                        .shadow(10.dp, RoundedCornerShape(24.dp)),
+                        .shadow(2.dp, RoundedCornerShape(24.dp)),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                     shape = RoundedCornerShape(24.dp)
                 ) {
@@ -249,7 +249,7 @@ fun ProfileScreen(
                     .padding(horizontal = 20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(20.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Row(
@@ -667,7 +667,7 @@ fun PlanDialog(
                 .padding(vertical = 12.dp),
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 12.dp
+            shadowElevation = 6.dp
         ) {
             Column(
                 modifier = Modifier

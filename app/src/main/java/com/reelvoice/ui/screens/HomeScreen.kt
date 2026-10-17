@@ -1560,7 +1560,7 @@ fun HeroCleanPanel(
         color = BackgroundCard,
         shape = RoundedCornerShape(24.dp),
         tonalElevation = 1.dp,
-        shadowElevation = 6.dp
+        shadowElevation = 2.dp
     ) {
         Column(
             modifier = Modifier
@@ -1809,7 +1809,7 @@ fun SuccessCleanBanner(info: SaveInfo) {
     Card(
         colors = CardDefaults.cardColors(containerColor = BackgroundCard),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -1919,7 +1919,7 @@ fun ComparisonCard(
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isCleanedPlaying) 6.dp else 2.dp
+            defaultElevation = if (isCleanedPlaying) 2.dp else 1.dp
         ),
         border = androidx.compose.foundation.BorderStroke(
             width = if (isCleanedPlaying) 2.dp else 0.5.dp,
@@ -2331,7 +2331,7 @@ private fun VibePickerSheet(
                     ) { /* swallow bg taps inside sheet */ },
                 color = BackgroundCard,
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                shadowElevation = 8.dp
+                shadowElevation = 4.dp
             ) {
                 Column(
                     modifier = Modifier
@@ -2586,7 +2586,7 @@ fun ReelVariantsCard(
             .fillMaxWidth()
             .padding(horizontal = 20.dp),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.elevatedCardColors(containerColor = BackgroundCard)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -3266,7 +3266,7 @@ fun MakeReelBanner(
             .height(64.dp)
             .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
         Box(

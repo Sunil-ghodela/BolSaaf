@@ -32,6 +32,7 @@ import kotlin.random.Random
 import com.reelvoice.audio.CleaningPreset
 import com.reelvoice.ui.animation.MD3Motion
 import com.reelvoice.ui.components.BottomNavBar
+import com.reelvoice.ui.components.BottomNavBarBottomPadding
 import com.reelvoice.ui.animation.slideInFromBottom
 import com.reelvoice.ui.animation.slideOutToBottom
 
@@ -416,7 +417,7 @@ fun LiveScreen(
                 }
             }
             
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(BottomNavBarBottomPadding))
         }
         
         feedbackPair?.let { pair ->
@@ -786,7 +787,7 @@ fun LiveRecordingCard(
             containerColor = Color.Transparent
         ),
         shape = RoundedCornerShape(18.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Box(
             modifier = Modifier
