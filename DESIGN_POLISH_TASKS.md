@@ -126,6 +126,7 @@ Verified on emulator (API 35, 1080x2400, density 420). Evidence: `design-verify/
 
 ### Additional fix shipped with the P1 pass
 
+- **Home "Recent Cleans" card had a heavy grey frame (the shadow the owner flagged).** `ComparisonCard` used a `Card` with `containerColor = Transparent` + a 1–2dp elevation. The M3 tinted elevation shadow rendered as a hard grey backdrop/frame around the rounded card on device (the gradient only covered the inner content, so the tinted shadow showed as a frame). Set elevation to `0.dp` and rely on a hairline border + the existing gradient. Verified on emulator: the grey frame is gone (pixel check: card now transitions white → pink with no grey band).
 - **Live record button was being clipped behind the nav bar (the "red dot") and/or overlapping the status text.** The WIP branch had pulled the record button out to a floating `BottomCenter` overlay, which overlapped `"Ready — tap record"` / `"Headphones recommended"`. Rebuilt the Live body as a **scrollable content region (`weight(1f)`) + a docked footer** (status + warning + record button) so the button is always fully visible and tappable above the nav, and no content overlaps it. Trimmed the mic visualizer (300dp → 240dp) and vertical rhythm so Home/Record/Live's common content fits without scrolling. Verified: idle, recording (`LIVE CLEANING`), and post-record states.
 
 ---

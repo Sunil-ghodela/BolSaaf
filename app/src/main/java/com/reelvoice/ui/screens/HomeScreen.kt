@@ -1918,15 +1918,15 @@ fun ComparisonCard(
             containerColor = androidx.compose.ui.graphics.Color.Transparent
         ),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isCleanedPlaying) 2.dp else 1.dp
-        ),
+        // Flat card: no drop shadow (the tinted M3 elevation shadow rendered as a
+        // heavy grey frame on device). Separation comes from a hairline border.
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = androidx.compose.foundation.BorderStroke(
-            width = if (isCleanedPlaying) 2.dp else 0.5.dp,
+            width = if (isCleanedPlaying) 1.5.dp else 0.5.dp,
             color = if (isCleanedPlaying) {
                 MaterialTheme.colorScheme.primary
             } else {
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             }
         )
     ) {
