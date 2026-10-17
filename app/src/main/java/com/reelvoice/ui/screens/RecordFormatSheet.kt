@@ -37,7 +37,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.reelvoice.ui.theme.AccentCyan
-import com.reelvoice.ui.theme.AccentPurple
 import com.reelvoice.ui.theme.BackgroundCard
 import com.reelvoice.ui.theme.SliderTrackStrong
 import com.reelvoice.ui.theme.TextPrimary

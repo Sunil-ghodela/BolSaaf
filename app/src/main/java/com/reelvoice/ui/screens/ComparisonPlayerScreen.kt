@@ -32,7 +32,6 @@ import com.reelvoice.ui.theme.AccentGreen
 import com.reelvoice.ui.theme.AccentPurple
 import com.reelvoice.ui.theme.BackgroundCard
 import com.reelvoice.ui.theme.BackgroundDark
-import com.reelvoice.ui.theme.TextPrimary
 import com.reelvoice.ui.theme.TextSecondary
 
 @Composable

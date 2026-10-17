@@ -56,7 +56,7 @@ The MD3 system was added (`MD3_DESIGN_SYSTEM.md`) but screens haven't been refac
 - [ ] Standardise corner radii to MD3 tokens (4 / 8 / 12 / 16 dp). Currently a free-for-all across LiveScreen and ComparisonScreen.
 - [ ] Add `contentDescription` to all icon buttons in `LiveScreen.kt:826–889`, `ComparisonPlayerScreen.kt:195–351`, `ProfileScreen.kt:140–161`.
 - [ ] Audit touch targets — several compact icon buttons in the recording card are < 48 dp.
-- [ ] Remove dead theme imports in `HomeScreen.kt:73–88`.
+- [x] Remove dead theme imports in `HomeScreen.kt` (also cleaned unused `MD3Motion`/slide imports in `LiveScreen.kt`, `TextPrimary` in `ComparisonPlayerScreen.kt`, `AccentPurple` in `RecordFormatSheet.kt`).
 - [ ] De-duplicate `ComparisonScreen` and `ComparisonPlayerScreen` (~400 lines duplicated).
 
 ## 4. English-only strings (Play listing is India-EN today)

@@ -30,11 +30,8 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.random.Random
 import com.reelvoice.audio.CleaningPreset
-import com.reelvoice.ui.animation.MD3Motion
 import com.reelvoice.ui.components.BottomNavBar
 import com.reelvoice.ui.components.BottomNavBarBottomPadding
-import com.reelvoice.ui.animation.slideInFromBottom
-import com.reelvoice.ui.animation.slideOutToBottom
 
 /**
  * Live Recording Screen with real-time audio visualization
