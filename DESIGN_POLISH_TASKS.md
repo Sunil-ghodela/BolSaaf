@@ -2,6 +2,8 @@
 
 > Created 2026-10-17. This is the **"Android design polish"** workstream (product-plan item 3 in the Codex "Day work" plan, and the "UI / brand alignment" item in `HANDOFF_OPENAI_REELVOICE.md`).
 >
+> **Status (2026-10-17):** ALL P0 items are **DONE and verified on the emulator** — see "P0 — Status" at the end.
+>
 > Reference: `MD3_DESIGN_SYSTEM.md` (design tokens), Compose screens in `app/src/main/java/com/reelvoice/ui/screens/`.
 > Screenshots reviewed: Home (Recent Cleans) and Live tab on emulator, 2026-10-17.
 
@@ -95,10 +97,20 @@ Owner feedback: "home pe title heading bhi shi nhi lag rahi".
 
 ## Suggested sequencing
 
-1. **P0 nav-bar overlap fix** (one shared inset solution → fixes Live + Home).
-2. **P0 shadow scale-down** (single pass across screens).
-3. **P1 hero heading** + pluralisation + Live header inset.
-4. **P2** polish pass.
+1. ~~**P0 nav-bar overlap fix**~~ — DONE
+2. ~~**P0 shadow scale-down**~~ — DONE
+3. **P1 hero heading** + pluralisation + Live header inset — pending
+4. **P2** polish pass
+
+---
+
+## P0 — Status (2026-10-17, commit `400afd8` on `integration/reelvoice-beta`)
+
+1. **Shadows reduced** — every card/sheet at 6–10dp now sits at 1–4dp (Home `HeroCleanPanel`, `SuccessCleanBanner`, `ComparisonCard`, bottom sheets, Profile identity card `.shadow(10dp)`→`2dp`, Profile dialog `12dp`→`6dp`, Live stats card). Nav bar `shadowElevation` 16dp → 8dp.
+2. **Nav-bar overlap fixed at the root** — the real cause was **forced edge-to-edge** (targetSdk 36 / Android 15) with no window-inset handling: content drew under both system bars. `MainActivity` now wraps the tab content in a `systemBars`-inset Box, so the header clears the status bar and the nav pill clears the system nav area. `LiveScreen` also got a `BottomNavBarBottomPadding` spacer so the 120dp record button is fully visible.
+3. **Content peeking below the nav pill (the red dot) masked** — the floating pill's 10dp bottom margin let scrolled content (e.g. the red "Make Reel" banner) show through. `BottomNavBar` now draws a background gradient scrim behind itself.
+
+Verified on emulator (API 35): Home + Live — no red dot, header inset correct, shadows visually softer. P1 (hero heading, "1 files", Live header) and P2 still open.
 
 Each item should be checked on a **real device** where possible (the emulator's rendering is close but not identical).
 
