@@ -38,6 +38,7 @@ Rules:
 - **Monthly and Annual grant identical entitlements.** The only difference is price, billing period, and renewal cadence. Do not fork the feature set per period — that doubles the support matrix for zero user value.
 - Display price is always read from `ProductDetails.subscriptionOfferDetails` at runtime. Never hardcode `₹199`/`₹299`/`₹1,499` in client copy or server responses.
 - Annual discount, introductory offers, and any promo are Play Console base-plan/offer config, not code.
+- **App identity (verified 2026-10-17 in Play Console):** the live **Production** app is **ReelVoice** (`com.reelvoice`, org "tranquilwaters", 25 installed). A separate **BolSaaf** app (`com.bolsaaf`) also exists in **Draft** (0 users). Create `pro_monthly` / `pro_annual` on the **live ReelVoice app**, not on the draft `com.bolsaaf`. Suggested display name: **"ReelVoice Pro"**.
 
 ---
 
@@ -324,7 +325,7 @@ Play pushes to a Pub/Sub topic for: renewal, cancel, expire, revoke. For MVP ski
 
 - **Never log the full `purchase_token`.** Store only `purchase_token_hash` (SHA-256) for audit.
 - **Rate limit** `/voice/billing/validate/` to ~10 calls/min/user.
-- **Service account JSON** at `/var/secrets/bolsaaf-play-sa.json`, mode `400`, owned by the gunicorn user. Add the SA email in Play Console → API access with financial/order permissions. NEVER commit.
+- **Service account JSON** at `/var/secrets/bolsaaf-play-sa.json`, mode `400`, owned by the gunicorn user. Add the SA email in Play Console by inviting it under **Users and permissions → Invite new users** (the old standalone "API access" page no longer exists) with financial/order permissions. NEVER commit.
 - **Acknowledgement is idempotent** — server and client both calling it is safe; validate before acknowledging so a fraudulent token isn't auto-consumed.
 - Validate `product_id` against the allow-list before hitting Play.
 
@@ -333,6 +334,12 @@ Play pushes to a Pub/Sub topic for: renewal, cancel, expire, revoke. For MVP ski
 ## 10. Implementation readiness (implemented — pending Play Console + service account)
 
 > **Status (2026-10-16):** steps 2–7 are implemented and verified (server + Android client). Steps 1 and 8 remain: the Play Console base plans and the Google service account are external setup, plus a license-tester purchase to close the loop.
+>
+> **Play Console state (verified 2026-10-17, on the ReelVoice app):**
+> - App `ReelVoice` (`com.reelvoice`) — **Production** (live), 25 installed, last updated 9 Oct 2026. (The separate `BolSaaf` app `com.bolsaaf` is a **Draft** — not the billing target.)
+> - **Subscriptions: none created yet** — Monetize → Subscriptions only shows "Create subscription" (neither `pro_monthly` nor `pro_annual` exists). Step 1 below is still open.
+> - **Internal testing:** track **Inactive** with "No releases" — no signed AAB uploaded (step 8 prerequisite).
+> - **Service account / API:** not set up yet; use the current flow in §9 (invite via Users & permissions).
 
 Launch decisions are now set: ₹79/month, ₹599/year, 20 free audio minutes/month, 10 free video minutes/month, and 60 Pro video minutes/month. Execute the implementation in this order.
 
