@@ -2,7 +2,7 @@
 
 > Created 2026-10-17. This is the **"Android design polish"** workstream (product-plan item 3 in the Codex "Day work" plan, and the "UI / brand alignment" item in `HANDOFF_OPENAI_REELVOICE.md`).
 >
-> **Status (2026-10-17):** ALL P0 items are **DONE and verified on the emulator** — see "P0 — Status" at the end. **P1 items are also DONE and verified on the emulator** (API 35) — see "P1 — Status" at the end.
+> **Status (2026-10-17):** ALL P0 items are **DONE and verified on the emulator** — see "P0 — Status" at the end. **P1 items are also DONE and verified on the emulator** (API 35) — see "P1 — Status" at the end. **P2 in progress:** shared empty states done; corner/radii, remaining hardcoded colours and the dark-theme pass still open.
 >
 > Reference: `MD3_DESIGN_SYSTEM.md` (design tokens), Compose screens in `app/src/main/java/com/reelvoice/ui/screens/`.
 > Screenshots reviewed: Home (Recent Cleans) and Live tab on emulator, 2026-10-17.
@@ -90,7 +90,7 @@ Owner feedback: "home pe title heading bhi shi nhi lag rahi".
 
 - Standardise corner radii / spacing tokens across Home, Live, History, Profile (some cards are 16dp, 20dp, 24dp).
 - Remove any remaining hardcoded `Color(0x...)` (the v1.1.0 pass replaced most — re-check new code).
-- Consistent empty states (Home "No recordings yet" vs History filtered-empty) — same visual language.
+- Consistent empty states (Home "No recordings yet" vs History filtered-empty) — same visual language. **DONE** — both now render the shared `MD3EmptyState` component (verified on emulator).
 - Dark theme pass: verify the reduced shadows + hero heading read well on the dark palette too.
 
 ---

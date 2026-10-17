@@ -110,6 +110,7 @@ import com.reelvoice.ui.animation.MD3Motion
 import com.reelvoice.ui.animation.slideInFromStart
 import com.reelvoice.ui.components.BeforeAfterFormatPicker
 import com.reelvoice.ui.components.BottomNavBar
+import com.reelvoice.ui.components.MD3EmptyState
 import com.reelvoice.ui.components.ModePresetStrip
 import com.reelvoice.ui.components.ReelTemplateSheet
 import com.reelvoice.ui.components.VoiceStyleSheet
@@ -682,32 +683,18 @@ fun HomeScreen(
             
             if (audioPairs.isEmpty()) {
                 item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 28.dp, vertical = 40.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Mic,
-                            contentDescription = null,
-                            modifier = Modifier.size(56.dp),
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "No recordings yet",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Record live or pick a file to clean your audio",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                    MD3EmptyState(
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Filled.Mic,
+                                contentDescription = null,
+                                modifier = Modifier.size(32.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        },
+                        title = "No recordings yet",
+                        subtitle = "Record live or pick a file to clean your audio"
+                    )
                 }
             }
 
