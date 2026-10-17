@@ -2,7 +2,7 @@
 
 > Created 2026-10-17. This is the **"Android design polish"** workstream (product-plan item 3 in the Codex "Day work" plan, and the "UI / brand alignment" item in `HANDOFF_OPENAI_REELVOICE.md`).
 >
-> **Status (2026-10-17):** ALL P0 items are **DONE and verified on the emulator** — see "P0 — Status" at the end.
+> **Status (2026-10-17):** ALL P0 items are **DONE and verified on the emulator** — see "P0 — Status" at the end. **P1 items are also DONE and verified on the emulator** (API 35) — see "P1 — Status" at the end.
 >
 > Reference: `MD3_DESIGN_SYSTEM.md` (design tokens), Compose screens in `app/src/main/java/com/reelvoice/ui/screens/`.
 > Screenshots reviewed: Home (Recent Cleans) and Live tab on emulator, 2026-10-17.
@@ -99,7 +99,7 @@ Owner feedback: "home pe title heading bhi shi nhi lag rahi".
 
 1. ~~**P0 nav-bar overlap fix**~~ — DONE
 2. ~~**P0 shadow scale-down**~~ — DONE
-3. **P1 hero heading** + pluralisation + Live header inset — pending
+3. ~~**P1 hero heading** + pluralisation + Live header inset~~ — DONE (commit `4a1d8d5`)
 4. **P2** polish pass
 
 ---
@@ -113,6 +113,20 @@ Owner feedback: "home pe title heading bhi shi nhi lag rahi".
 Verified on emulator (API 35): Home + Live — no red dot, header inset correct, shadows visually softer. P1 (hero heading, "1 files", Live header) and P2 still open.
 
 Each item should be checked on a **real device** where possible (the emulator's rendering is close but not identical).
+
+---
+
+## P1 — Status (2026-10-17, `integration/reelvoice-beta`)
+
+Verified on emulator (API 35, 1080x2400, density 420). Evidence: `design-verify/` screenshots.
+
+1. **Home hero heading rebalanced** — `"Studio-grade voice"` `displaySmall` (36sp) → `headlineLarge`; the `"Video + Audio"` line `headlineSmall` (24sp) → `titleLarge`. Stack no longer reads top-heavy; brand two-colour split kept.
+2. **Live pluralisation fixed** — Recent Recordings count now shows `"1 file"` for a single item (was `"1 files"`). Verified after a live recording saved.
+3. **Live header inset** — header clears the status bar on the emulator (no overlap with the system clock). No change needed.
+
+### Additional fix shipped with the P1 pass
+
+- **Live record button was being clipped behind the nav bar (the "red dot") and/or overlapping the status text.** The WIP branch had pulled the record button out to a floating `BottomCenter` overlay, which overlapped `"Ready — tap record"` / `"Headphones recommended"`. Rebuilt the Live body as a **scrollable content region (`weight(1f)`) + a docked footer** (status + warning + record button) so the button is always fully visible and tappable above the nav, and no content overlaps it. Trimmed the mic visualizer (300dp → 240dp) and vertical rhythm so Home/Record/Live's common content fits without scrolling. Verified: idle, recording (`LIVE CLEANING`), and post-record states.
 
 ---
 

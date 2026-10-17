@@ -110,15 +110,23 @@ fun LiveScreen(
             onGoToHistory = { onTabSelected(2) }
         )
         
-        // Main content with scrolling
+        // Main content: scrollable body + docked record footer (button never clipped behind the nav)
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 80.dp, bottom = 80.dp)
-                .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                .padding(top = 80.dp)
+                .padding(bottom = BottomNavBarBottomPadding + 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(20.dp))
+            // Scrollable content region — scrolls inside the space above the docked footer
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Format toggle: Audio ⟷ Video
             if (!isRecording) {
@@ -145,7 +153,7 @@ fun LiveScreen(
 
             // Main visualization area with microphone
             Box(
-                modifier = Modifier.size(300.dp),
+                modifier = Modifier.size(240.dp),
                 contentAlignment = Alignment.Center
             ) {
                 // Animated waveform bars behind microphone
@@ -232,7 +240,7 @@ fun LiveScreen(
                 }
             }
             
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(24.dp))
             
             // Stats bar
             StatsBar(
@@ -242,7 +250,7 @@ fun LiveScreen(
                 latency = 60
             )
             
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             
             // Mode selector
             ModeSelector(
@@ -261,10 +269,53 @@ fun LiveScreen(
             
             Spacer(modifier = Modifier.height(32.dp))
             
-            // Status text
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+            // Recent Recordings Section
+            if (audioPairs.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(32.dp))
+                
+                // Section title
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Recent Recordings",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        if (audioPairs.size == 1) "1 file" else "${audioPairs.size} files",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Show only recording files (not uploaded)
+                audioPairs.filter { it.isRecording }.take(3).forEach { pair ->
+                    LiveRecordingCard(
+                        pair = pair,
+                        currentlyPlaying = currentlyPlaying,
+                        onPlayOriginal = { onPlayFile(pair.originalFile) },
+                        onPlayCleaned = { onPlayFile(pair.cleanedFile) },
+                        onRemove = { onRemovePair(pair.timestamp) },
+                        onShare = { onShareFile(pair.cleanedFile) },
+                        onDownload = { onDownloadFile(pair.cleanedFile) },
+                        onFeedback = { feedbackPair = pair }
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            }  // end scrollable content region
+
+            // Docked footer: status + warning + record action, always visible above the nav bar
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -294,10 +345,9 @@ fun LiveScreen(
                         color = if (isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Warning text
+
+                Spacer(modifier = Modifier.height(4.dp))
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -314,110 +364,64 @@ fun LiveScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
-            }
-            
-            // Recent Recordings Section
-            if (audioPairs.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                // Section title
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Recent Recordings",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Text(
-                        "${audioPairs.size} files",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                // Show only recording files (not uploaded)
-                audioPairs.filter { it.isRecording }.take(3).forEach { pair ->
-                    LiveRecordingCard(
-                        pair = pair,
-                        currentlyPlaying = currentlyPlaying,
-                        onPlayOriginal = { onPlayFile(pair.originalFile) },
-                        onPlayCleaned = { onPlayFile(pair.cleanedFile) },
-                        onRemove = { onRemovePair(pair.timestamp) },
-                        onShare = { onShareFile(pair.cleanedFile) },
-                        onDownload = { onDownloadFile(pair.cleanedFile) },
-                        onFeedback = { feedbackPair = pair }
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(20.dp))
-            
-            // Recording button
-            Box(
-                modifier = Modifier
-                    .size(120.dp)
-                    .padding(8.dp)
-            ) {
-                // Pulse effect when recording
-                if (isRecording) {
-                    val pulseScale by rememberInfiniteTransition(label = "pulse").animateFloat(
-                        initialValue = 1f,
-                        targetValue = 1.3f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(800, easing = EaseInOutCubic),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "pulse"
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(100.dp)
-                            .scale(pulseScale)
-                            .alpha(0.3f)
-                            .background(MaterialTheme.colorScheme.error, CircleShape)
-                            .align(Alignment.Center)
-                    )
-                }
-                
-                // Main button
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Primary record action
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .clip(CircleShape)
-                        .background(
-                            if (isRecording) MaterialTheme.colorScheme.error 
-                            else MaterialTheme.colorScheme.primary
-                        )
-                        .clickable {
-                            if (isRecording) {
-                                onStopRecording()
-                            } else if (isVideoMode) {
-                                onStartVideoRecording()
-                            } else {
-                                onStartRecording()
-                            }
-                        },
-                    contentAlignment = Alignment.Center
+                        .size(112.dp)
+                        .padding(8.dp)
                 ) {
-                    Icon(
-                        imageVector = if (isRecording) Icons.Default.Close else Icons.Default.PlayArrow,
-                        contentDescription = if (isRecording) "Stop live" else "Start live",
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onError.takeIf { isRecording } 
-                            ?: MaterialTheme.colorScheme.onPrimary
-                    )
+                    if (isRecording) {
+                        val pulseScale by rememberInfiniteTransition(label = "pulse").animateFloat(
+                            initialValue = 1f,
+                            targetValue = 1.3f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(800, easing = EaseInOutCubic),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "pulse"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(94.dp)
+                                .scale(pulseScale)
+                                .alpha(0.3f)
+                                .background(MaterialTheme.colorScheme.error, CircleShape)
+                                .align(Alignment.Center)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(
+                                if (isRecording) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.primary
+                            )
+                            .clickable {
+                                if (isRecording) {
+                                    onStopRecording()
+                                } else if (isVideoMode) {
+                                    onStartVideoRecording()
+                                } else {
+                                    onStartRecording()
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isRecording) Icons.Default.Close else Icons.Default.PlayArrow,
+                            contentDescription = if (isRecording) "Stop live" else "Start live",
+                            modifier = Modifier.size(44.dp),
+                            tint = MaterialTheme.colorScheme.onError.takeIf { isRecording }
+                                ?: MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
                 }
             }
-            
-            Spacer(modifier = Modifier.height(BottomNavBarBottomPadding))
         }
         
         feedbackPair?.let { pair ->

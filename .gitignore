@@ -24,3 +24,6 @@ tmp_audio/
 # Claude Code session state (per-machine)
 .claude/
 *.pem
+
+# Emulator verification screenshots (local)
+design-verify/
