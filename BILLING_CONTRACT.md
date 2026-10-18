@@ -335,11 +335,14 @@ Play pushes to a Pub/Sub topic for: renewal, cancel, expire, revoke. For MVP ski
 
 > **Status (2026-10-16):** steps 2–7 are implemented and verified (server + Android client). Steps 1 and 8 remain: the Play Console base plans and the Google service account are external setup, plus a license-tester purchase to close the loop.
 >
-> **Play Console state (verified 2026-10-17, on the ReelVoice app):**
+> **Play Console state (verified 2026-10-17/18, on the ReelVoice app):**
 > - App `ReelVoice` (`com.reelvoice`) — **Production** (live), 25 installed, last updated 9 Oct 2026. (The separate `BolSaaf` app `com.bolsaaf` is a **Draft** — not the billing target.)
-> - **Subscriptions: none created yet** — Monetize → Subscriptions only shows "Create subscription" (neither `pro_monthly` nor `pro_annual` exists). Step 1 below is still open.
+> - **Step 1 DONE (18 Oct):** both subscriptions created and their base plans **ACTIVE** in Play Console:
+>   - `pro_monthly` — "ReelVoice Pro", base plan `monthly` (Monthly, auto-renewing, 7-day grace) — **Active**. India ₹80.00 (₹79 charm-rounded), other regions auto-converted (US $0.79, EU €0.89 …).
+>   - `pro_annual` — "ReelVoice Pro (Annual)", base plan `annual` (Yearly, auto-renewing) — **Active**. India base price entered ₹599/year, auto-converted to all regions.
 > - **Internal testing:** track **Inactive** with "No releases" — no signed AAB uploaded (step 8 prerequisite).
 > - **Service account / API:** not set up yet; use the current flow in §9 (invite via Users & permissions).
+> - Note: Play Console UI quirk — the region/price table only renders after the "Price and availability" section is scrolled into view; the "Set price" bulk dialog needs the section visible first.
 
 Launch decisions are now set: ₹79/month, ₹599/year, 20 free audio minutes/month, 10 free video minutes/month, and 60 Pro video minutes/month. Execute the implementation in this order.
 
