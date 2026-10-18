@@ -56,6 +56,20 @@ REEL_NEW = """def _maybe_extract_voice(input_wav: Path, output_wav: Path) -> Non
     ]
     subprocess.run(cmd, check=True, capture_output=True, text=True)
     vocals = _resolve_vocals_file(out_dir, input_wav.stem)
+    # Demucs can leave a bright, granular separation residue on speech.
+    # Match the extract_voice path's conservative 7.5 kHz low-pass before
+    # optional dry blending; do not add another denoise/gate pass here.
+    filtered = output_wav.parent / "vocals_lp.wav"
+    lp_cmd = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-i", str(vocals),
+        "-af", "lowpass=f=7500",
+        "-c:a", "pcm_s16le",
+        str(filtered),
+    ]
+    lp = subprocess.run(lp_cmd, capture_output=True, text=True)
+    if lp.returncode == 0 and filtered.exists():
+        vocals = filtered
     if dry_ratio >= 0.002:
         blend_vocals_dry(vocals, input_wav, output_wav, dry_ratio)
     else:
