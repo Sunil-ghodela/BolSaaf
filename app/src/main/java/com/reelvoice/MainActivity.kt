@@ -83,6 +83,10 @@ class MainActivity : ComponentActivity() {
     private var mediaPlayer: MediaPlayer? = null
     private var currentlyPlayingFile by mutableStateOf<String?>(null)
     private var isPlaying by mutableStateOf(false)
+    /** Live playback position/duration (ms) so History/Live can show a progress bar. */
+    private var playbackPositionMs by mutableIntStateOf(0)
+    private var playbackDurationMs by mutableIntStateOf(0)
+    private var playbackTickerJob: kotlinx.coroutines.Job? = null
     private var isRecording by mutableStateOf(false)
     private var isCleaning by mutableStateOf(false)
     private var isUploading by mutableStateOf(false)
@@ -473,6 +477,11 @@ class MainActivity : ComponentActivity() {
                         audioPairs = getAudioPairs(),
                         currentlyPlaying = currentlyPlayingFile,
                         cleaningPreset = cleaningPreset,
+                        showSuccess = showSuccess,
+                        onDismissSuccess = { showSuccess = false },
+                        lastSaveInfo = lastSaveInfo,
+                        playbackPositionMs = playbackPositionMs,
+                        playbackDurationMs = playbackDurationMs,
                         modeAvailabilityNote = cloudModeAvailabilityNote(),
                         isVideoMode = liveFormat == RecordFormat.VIDEO,
                         onToggleFormat = { isVideo ->
@@ -500,6 +509,8 @@ class MainActivity : ComponentActivity() {
                         selectedTab = selectedTab,
                         audioPairs = getAudioPairs(),
                         currentlyPlaying = currentlyPlayingFile,
+                        playbackPositionMs = playbackPositionMs,
+                        playbackDurationMs = playbackDurationMs,
                         onTabSelected = { tab -> selectedTab = tab },
                         onPlayFile = { fileName -> playAudioFile(fileName) },
                         onStopFile = { stopPlayback() },
@@ -1268,6 +1279,7 @@ class MainActivity : ComponentActivity() {
             mp.start()
             currentlyPlayingFile = fileName
             isPlaying = true
+            startPlaybackTicker(fileName)
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(this, "Cannot play: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -1293,6 +1305,41 @@ class MainActivity : ComponentActivity() {
         mediaPlayer = null
         currentlyPlayingFile = null
         isPlaying = false
+        playbackTickerJob?.cancel()
+        playbackTickerJob = null
+        playbackPositionMs = 0
+        playbackDurationMs = 0
+    }
+
+    /**
+     * Polls the active [MediaPlayer] so History/Live rows can render a real progress bar.
+     * Cancelled by [stopPlayback] or when the track changes.
+     */
+    private fun startPlaybackTicker(fileName: String) {
+        playbackTickerJob?.cancel()
+        playbackPositionMs = 0
+        playbackDurationMs = try {
+            mediaPlayer?.duration?.coerceAtLeast(0) ?: 0
+        } catch (_: Exception) {
+            0
+        }
+        playbackTickerJob = lifecycleScope.launch {
+            while (true) {
+                val mp = mediaPlayer ?: break
+                if (currentlyPlayingFile != fileName) break
+                playbackPositionMs = try {
+                    mp.currentPosition
+                } catch (_: Exception) {
+                    playbackPositionMs
+                }
+                playbackDurationMs = try {
+                    mp.duration.coerceAtLeast(0)
+                } catch (_: Exception) {
+                    playbackDurationMs
+                }
+                kotlinx.coroutines.delay(200)
+            }
+        }
     }
 
     override fun onPause() {

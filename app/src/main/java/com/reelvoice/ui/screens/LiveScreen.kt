@@ -45,6 +45,11 @@ fun LiveScreen(
     audioPairs: List<AudioPair> = emptyList(),
     currentlyPlaying: String? = null,
     cleaningPreset: CleaningPreset = CleaningPreset.NORMAL,
+    showSuccess: Boolean = false,
+    onDismissSuccess: () -> Unit = {},
+    lastSaveInfo: SaveInfo? = null,
+    playbackPositionMs: Int = 0,
+    playbackDurationMs: Int = 0,
     modeAvailabilityNote: String? = null,
     isVideoMode: Boolean = false,
     onToggleFormat: (Boolean) -> Unit = {},
@@ -63,6 +68,19 @@ fun LiveScreen(
 ) {
     val modes = listOf("Normal", "Strong", "Studio")
     var feedbackPair by remember { mutableStateOf<AudioPair?>(null) }
+
+    // Newest recording first — surfaced at the top so a just-cleaned clip never "disappears".
+    val latestRecording = remember(audioPairs) {
+        audioPairs.filter { it.isRecording }.maxByOrNull { it.timestamp }
+    }
+
+    // Auto-dismiss the success banner (matches Home) so it doesn't stick forever.
+    LaunchedEffect(showSuccess, lastSaveInfo?.cleanedFileName) {
+        if (showSuccess) {
+            kotlinx.coroutines.delay(4000L)
+            onDismissSuccess()
+        }
+    }
     
     Box(
         modifier = Modifier
@@ -125,6 +143,58 @@ fun LiveScreen(
             ) {
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Just-recorded result — the cleaned clip stays visible + playable here,
+            // instead of only living far down the scroll (the "where did it go?" bug).
+            AnimatedVisibility(
+                visible = showSuccess && lastSaveInfo != null,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                lastSaveInfo?.let { info ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp)
+                    ) {
+                        SuccessCleanBanner(info)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { onDismissSuccess() },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Dismiss") }
+                            Button(
+                                onClick = {
+                                    onPlayFile(info.cleanedFileName)
+                                    onDismissSuccess()
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Play cleaned") }
+                        }
+                    }
+                }
+            }
+
+            // Persistent latest-recording card: Original ⟷ Cleaned + live progress.
+            if (!isRecording && latestRecording != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                LiveLatestRecordingCard(
+                    pair = latestRecording,
+                    currentlyPlaying = currentlyPlaying,
+                    playbackPositionMs = playbackPositionMs,
+                    playbackDurationMs = playbackDurationMs,
+                    onPlayOriginal = { onPlayFile(latestRecording.originalFile) },
+                    onPlayCleaned = { onPlayFile(latestRecording.cleanedFile) },
+                    onShare = { onShareFile(latestRecording.cleanedFile) },
+                    onDownload = { onDownloadFile(latestRecording.cleanedFile) },
+                    onFeedback = { feedbackPair = latestRecording }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             // Format toggle: Audio ⟷ Video
             if (!isRecording) {
                 Row(
@@ -150,9 +220,22 @@ fun LiveScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Main visualization area with microphone
+            // Main visualization area with microphone — compact single control.
+            // Tapping the circle itself starts/stops (no duplicate red button below).
             Box(
-                modifier = Modifier.size(240.dp),
+                modifier = Modifier
+                    .size(240.dp)
+                    .clip(CircleShape)
+                    .clickable {
+                        when {
+                            isRecording -> onStopRecording()
+                            isVideoMode -> onStartVideoRecording()
+                            else -> onStartRecording()
+                        }
+                    }
+                    .semantics {
+                        contentDescription = if (isRecording) "Stop recording" else "Start recording"
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 // Animated waveform bars behind microphone
@@ -201,9 +284,19 @@ fun LiveScreen(
                         .size(180.dp)
                         .border(
                             width = 3.dp,
-                            brush = Brush.sweepGradient(
-                                colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.primary)
-                            ),
+                            brush = if (isRecording) {
+                                Brush.sweepGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.error,
+                                        MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
+                                        MaterialTheme.colorScheme.error
+                                    )
+                                )
+                            } else {
+                                Brush.sweepGradient(
+                                    colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.secondary, MaterialTheme.colorScheme.primary)
+                                )
+                            },
                             shape = CircleShape
                         )
                         .padding(4.dp)
@@ -211,7 +304,8 @@ fun LiveScreen(
                         .background(
                             brush = Brush.radialGradient(
                                 colors = listOf(
-                                    MaterialTheme.colorScheme.surfaceContainer,
+                                    if (isRecording) MaterialTheme.colorScheme.error.copy(alpha = 0.14f)
+                                    else MaterialTheme.colorScheme.surfaceContainer,
                                     MaterialTheme.colorScheme.surface
                                 )
                             )
@@ -219,10 +313,10 @@ fun LiveScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (isRecording) Icons.Filled.Mic else Icons.Filled.MicNone,
-                        contentDescription = if (isRecording) "Live mic" else "Idle mic",
+                        imageVector = if (isRecording) Icons.Filled.Stop else Icons.Filled.MicNone,
+                        contentDescription = if (isRecording) "Stop recording" else "Start recording",
                         modifier = Modifier.size(80.dp),
-                        tint = if (isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                        tint = if (isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
                     )
                 }
                 
@@ -300,6 +394,8 @@ fun LiveScreen(
                     LiveRecordingCard(
                         pair = pair,
                         currentlyPlaying = currentlyPlaying,
+                        playbackPositionMs = playbackPositionMs,
+                        playbackDurationMs = playbackDurationMs,
                         onPlayOriginal = { onPlayFile(pair.originalFile) },
                         onPlayCleaned = { onPlayFile(pair.cleanedFile) },
                         onRemove = { onRemovePair(pair.timestamp) },
@@ -313,8 +409,14 @@ fun LiveScreen(
             Spacer(modifier = Modifier.height(16.dp))
             }  // end scrollable content region
 
-            // Docked footer: status + warning + record action, always visible above the nav bar
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // Docked footer: status + hint, always visible above the nav bar.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(top = 12.dp, bottom = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -338,7 +440,7 @@ fun LiveScreen(
                         )
                     }
                     Text(
-                        if (isRecording) "LIVE CLEANING" else "Ready — tap record",
+                        if (isRecording) "LIVE CLEANING" else "Ready — tap the mic",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = if (isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -366,60 +468,11 @@ fun LiveScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Primary record action
-                Box(
-                    modifier = Modifier
-                        .size(112.dp)
-                        .padding(8.dp)
-                ) {
-                    if (isRecording) {
-                        val pulseScale by rememberInfiniteTransition(label = "pulse").animateFloat(
-                            initialValue = 1f,
-                            targetValue = 1.3f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(800, easing = EaseInOutCubic),
-                                repeatMode = RepeatMode.Reverse
-                            ),
-                            label = "pulse"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(94.dp)
-                                .scale(pulseScale)
-                                .alpha(0.3f)
-                                .background(MaterialTheme.colorScheme.error, CircleShape)
-                                .align(Alignment.Center)
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .background(
-                                if (isRecording) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.primary
-                            )
-                            .clickable {
-                                if (isRecording) {
-                                    onStopRecording()
-                                } else if (isVideoMode) {
-                                    onStartVideoRecording()
-                                } else {
-                                    onStartRecording()
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = if (isRecording) Icons.Default.Close else Icons.Default.PlayArrow,
-                            contentDescription = if (isRecording) "Stop live" else "Start live",
-                            modifier = Modifier.size(44.dp),
-                            tint = MaterialTheme.colorScheme.onError.takeIf { isRecording }
-                                ?: MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                }
+                Text(
+                    if (isVideoMode) "Tap the circle to record video" else "Tap the mic to start / stop",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                )
             }
         }
         
@@ -785,6 +838,8 @@ fun WaveformBar(
 fun LiveRecordingCard(
     pair: AudioPair,
     currentlyPlaying: String?,
+    playbackPositionMs: Int = 0,
+    playbackDurationMs: Int = 0,
     onPlayOriginal: () -> Unit,
     onPlayCleaned: () -> Unit,
     onRemove: () -> Unit,
@@ -794,6 +849,9 @@ fun LiveRecordingCard(
 ) {
     val isOriginalPlaying = currentlyPlaying == pair.originalFile
     val isCleanedPlaying = currentlyPlaying == pair.cleanedFile
+    val progress = if (playbackDurationMs > 0) {
+        playbackPositionMs.toFloat() / playbackDurationMs.toFloat()
+    } else 0f
     
     Card(
         modifier = Modifier
@@ -865,7 +923,10 @@ fun LiveRecordingCard(
                     label = "Original",
                     isPlaying = isOriginalPlaying,
                     onClick = onPlayOriginal,
-                    borderColor = MaterialTheme.colorScheme.tertiary
+                    borderColor = MaterialTheme.colorScheme.tertiary,
+                    progress = if (isOriginalPlaying) progress else null,
+                    positionMs = playbackPositionMs,
+                    durationMs = playbackDurationMs
                 )
                 
                 // Cleaned
@@ -874,7 +935,10 @@ fun LiveRecordingCard(
                     label = "Cleaned",
                     isPlaying = isCleanedPlaying,
                     onClick = onPlayCleaned,
-                    borderColor = MaterialTheme.colorScheme.primary
+                    borderColor = MaterialTheme.colorScheme.primary,
+                    progress = if (isCleanedPlaying) progress else null,
+                    positionMs = playbackPositionMs,
+                    durationMs = playbackDurationMs
                 )
             }
             
@@ -914,7 +978,10 @@ fun LiveAudioButton(
     label: String,
     isPlaying: Boolean,
     onClick: () -> Unit,
-    borderColor: Color
+    borderColor: Color,
+    progress: Float? = null,
+    positionMs: Int = 0,
+    durationMs: Int = 0
 ) {
     Column(
         modifier = modifier
@@ -973,6 +1040,138 @@ fun LiveAudioButton(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onBackground
         )
+
+        // Live progress bar while this track is playing.
+        if (progress != null) {
+            Spacer(modifier = Modifier.height(6.dp))
+            LinearProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp)),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = "${formatPlaybackTime(positionMs)} / ${formatPlaybackTime(durationMs)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun formatPlaybackTime(ms: Int): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0)
+    val m = totalSec / 60
+    val s = totalSec % 60
+    return "%d:%02d".format(java.util.Locale.US, m, s)
+}
+
+/**
+ * Highlights the single most-recent recording right at the top of the Live tab,
+ * with Original ⟷ Cleaned playback + a live progress bar. Fixes the "cleaned clip
+ * vanished after recording" complaint.
+ */
+@Composable
+fun LiveLatestRecordingCard(
+    pair: AudioPair,
+    currentlyPlaying: String?,
+    playbackPositionMs: Int,
+    playbackDurationMs: Int,
+    onPlayOriginal: () -> Unit,
+    onPlayCleaned: () -> Unit,
+    onShare: () -> Unit,
+    onDownload: () -> Unit,
+    onFeedback: () -> Unit
+) {
+    val isOriginalPlaying = currentlyPlaying == pair.originalFile
+    val isCleanedPlaying = currentlyPlaying == pair.cleanedFile
+    val progress = if (playbackDurationMs > 0) {
+        playbackPositionMs.toFloat() / playbackDurationMs.toFloat()
+    } else 0f
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "Latest recording",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Text(
+                    pair.time,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                LiveAudioButton(
+                    modifier = Modifier.weight(1f),
+                    label = "Original",
+                    isPlaying = isOriginalPlaying,
+                    onClick = onPlayOriginal,
+                    borderColor = MaterialTheme.colorScheme.tertiary,
+                    progress = if (isOriginalPlaying) progress else null,
+                    positionMs = playbackPositionMs,
+                    durationMs = playbackDurationMs
+                )
+                LiveAudioButton(
+                    modifier = Modifier.weight(1f),
+                    label = "Cleaned",
+                    isPlaying = isCleanedPlaying,
+                    onClick = onPlayCleaned,
+                    borderColor = MaterialTheme.colorScheme.primary,
+                    progress = if (isCleanedPlaying) progress else null,
+                    positionMs = playbackPositionMs,
+                    durationMs = playbackDurationMs
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                LiveActionButton(icon = Icons.Filled.Share, label = "Share", onClick = onShare)
+                LiveActionButton(icon = Icons.Filled.Download, label = "Save", onClick = onDownload)
+                LiveActionButton(icon = Icons.Filled.ThumbUp, label = "Feedback", onClick = onFeedback)
+            }
+        }
     }
 }
 

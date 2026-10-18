@@ -1,6 +1,11 @@
 package com.reelvoice.ui.screens
 
 import android.graphics.Bitmap
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,6 +30,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -64,6 +70,8 @@ fun HistoryScreen(
     selectedTab: Int = 2,
     audioPairs: List<AudioPair> = emptyList(),
     currentlyPlaying: String? = null,
+    playbackPositionMs: Int = 0,
+    playbackDurationMs: Int = 0,
     onTabSelected: (Int) -> Unit = {},
     onPlayFile: (String) -> Unit = {},
     onStopFile: () -> Unit = {},
@@ -230,6 +238,8 @@ fun HistoryScreen(
                                 pair = pair,
                                 recordingsDir = recordingsDir,
                                 currentlyPlaying = currentlyPlaying,
+                                playbackPositionMs = playbackPositionMs,
+                                playbackDurationMs = playbackDurationMs,
                                 onPlay = {
                                     if (currentlyPlaying == pair.cleanedFile) onStopFile()
                                     else onPlayFile(pair.cleanedFile)
@@ -334,6 +344,8 @@ private fun HistoryMediaRow(
     pair: AudioPair,
     recordingsDir: File,
     currentlyPlaying: String?,
+    playbackPositionMs: Int = 0,
+    playbackDurationMs: Int = 0,
     onPlay: () -> Unit,
     onSave: () -> Unit,
     onShare: () -> Unit,
@@ -345,6 +357,9 @@ private fun HistoryMediaRow(
     val video = isVideoFile(pair.cleanedFile)
     val playing = currentlyPlaying == pair.cleanedFile
     val done = cleaned.exists()
+    val playbackProgress = if (playbackDurationMs > 0) {
+        (playbackPositionMs.toFloat() / playbackDurationMs.toFloat()).coerceIn(0f, 1f)
+    } else 0f
 
     val surfaceContainer = MaterialTheme.colorScheme.surfaceContainer
     val onSurface = MaterialTheme.colorScheme.onSurface
@@ -494,6 +509,34 @@ private fun HistoryMediaRow(
                 }
             }
         }
+        // Live playback progress — shows position/duration while this row plays.
+        AnimatedVisibility(
+            visible = playing,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 14.dp, end = 14.dp, top = 2.dp)
+            ) {
+                LinearProgressIndicator(
+                    progress = { playbackProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                    color = primary,
+                    trackColor = surfaceVariant
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "${formatPlaybackClock(playbackPositionMs)} / ${formatPlaybackClock(playbackDurationMs)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = onSurfaceVariant
+                )
+            }
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -533,6 +576,13 @@ private fun formatDuration(sec: Float): String {
     val m = s / 60
     val r = s % 60
     return "%d:%02d".format(Locale.US, m, r)
+}
+
+private fun formatPlaybackClock(ms: Int): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0)
+    val m = totalSec / 60
+    val s = totalSec % 60
+    return "%d:%02d".format(Locale.US, m, s)
 }
 
 /**
