@@ -320,17 +320,6 @@ fun LiveScreen(
                     )
                 }
                 
-                // Recording indicator dot
-                if (isRecording) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .offset(y = 20.dp)
-                            .size(12.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.error)
-                    )
-                }
             }
             
             Spacer(modifier = Modifier.height(24.dp))
