@@ -144,6 +144,7 @@ fun HomeScreen(
     showCleanButton: Boolean = false,
     selectedFileName: String? = null,
     selectedTab: Int = 0,
+    recordingPreset: CleaningPreset = CleaningPreset.STRONG,
     cleaningPreset: CleaningPreset = CleaningPreset.NORMAL,
     modeAvailabilityNote: String? = null,
     processingModes: List<String> = listOf(
@@ -629,7 +630,7 @@ fun HomeScreen(
 
                 HeroCleanPanel(
                     isRecording = isRecording,
-                    cleaningPreset = cleaningPreset,
+                    cleaningPreset = recordingPreset.forRecording(),
                     helperText = if (isRecording) "Recording… tap stop when done" else "Record with real-time noise cleaning",
                     onCleanTap = {
                         if (isRecording) onStopRecording() else onStartRecording()

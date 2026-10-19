@@ -156,7 +156,7 @@ class RecordingService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        audioProcessor.cleaningPreset = CleaningPreset.valueOf(presetName)
+        audioProcessor.cleaningPreset = CleaningPreset.valueOf(presetName).forRecording()
 
         val originalFile = File(originalPath)
         val cleanedFile = File(cleanedPath)

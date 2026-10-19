@@ -11,7 +11,12 @@ enum class CleaningPreset(val label: String, val inputLinearScale: Float) {
     /** Slightly hotter (~−5 dB) — more presence */
     STUDIO("Studio", 0.55f);
 
+    /** Normal remains available to uploaded-file processing, not microphone recording. */
+    fun forRecording(): CleaningPreset = if (this == NORMAL) STRONG else this
+
     companion object {
+        val recordingPresets: List<CleaningPreset> = listOf(STRONG, STUDIO)
+
         fun fromIndex(i: Int): CleaningPreset = entries.getOrElse(i) { NORMAL }
     }
 }

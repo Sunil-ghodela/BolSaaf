@@ -97,6 +97,8 @@ class MainActivity : ComponentActivity() {
     private var showSuccess by mutableStateOf(false)
     private var lastSaveInfo by mutableStateOf<SaveInfo?>(null)
     private var cleaningPreset by mutableStateOf(CleaningPreset.NORMAL)
+    // Microphone recording is independent of cloud/adaptive upload settings.
+    private var recordingPreset by mutableStateOf(CleaningPreset.STRONG)
     private var processingFlow by mutableStateOf(ProcessingFlow.REEL_MODE)
     private var freeMinutesLeft by mutableIntStateOf(FREE_QUOTA_MINUTES)
     /** Order matches Home flow chips: Reel first (product default). */
@@ -394,6 +396,7 @@ class MainActivity : ComponentActivity() {
                 when (selectedTab) {
                     0 -> HomeScreen(
                         recordingsDir = recDir,
+                        recordingPreset = recordingPreset,
                         isRecording = isRecording,
                         isCleaning = isCleaning,
                         isUploading = isUploading,
@@ -471,18 +474,15 @@ class MainActivity : ComponentActivity() {
                     )
                     1 -> LiveScreen(
                         isRecording = isRecording,
-                        audioLevel = 0.7f,
                         selectedTab = selectedTab,
-                        freeMinutesLeft = freeMinutesLeft,
                         audioPairs = getAudioPairs(),
                         currentlyPlaying = currentlyPlayingFile,
-                        cleaningPreset = cleaningPreset,
+                        cleaningPreset = recordingPreset,
                         showSuccess = showSuccess,
                         onDismissSuccess = { showSuccess = false },
                         lastSaveInfo = lastSaveInfo,
                         playbackPositionMs = playbackPositionMs,
                         playbackDurationMs = playbackDurationMs,
-                        modeAvailabilityNote = cloudModeAvailabilityNote(),
                         isVideoMode = liveFormat == RecordFormat.VIDEO,
                         onToggleFormat = { isVideo ->
                             liveFormat = if (isVideo) RecordFormat.VIDEO else RecordFormat.AUDIO
@@ -490,19 +490,17 @@ class MainActivity : ComponentActivity() {
                         onStartVideoRecording = {
                             requestCameraThen { showVideoRecorder = true }
                         },
-                        onCleaningPresetChange = { cleaningPreset = it },
+                        onCleaningPresetChange = { if (!isRecording) recordingPreset = it.forRecording() },
                         onStartRecording = { startRecording() },
                         onStopRecording = { stopRecording() },
                         onTabSelected = { tab -> selectedTab = tab },
                         onPlayFile = { fileName -> playAudioFile(fileName) },
                         onStopFile = { stopPlayback() },
-                        onRemovePair = { timestamp -> removeAudioPair(timestamp) },
                         onShareFile = { fileName -> shareFile(fileName) },
                         onDownloadFile = { fileName -> downloadFile(fileName) },
                         onSubmitFeedback = { pair, clearVoice, issueType, issueTs, notes ->
                             submitUserFeedback(pair, clearVoice, issueType, issueTs, notes)
-                        },
-                        onGoBack = { selectedTab = 0 }
+                        }
                     )
                     2 -> HistoryScreen(
                         recordingsDir = recDir,
@@ -549,6 +547,7 @@ class MainActivity : ComponentActivity() {
                     )
                     else -> HomeScreen(
                         recordingsDir = recDir,
+                        recordingPreset = recordingPreset,
                         isRecording = isRecording,
                         isCleaning = isCleaning,
                         isUploading = isUploading,
@@ -1166,7 +1165,8 @@ class MainActivity : ComponentActivity() {
         tempRecordingFile = originalFile
 
         // Recording is owned by the foreground service so it survives backgrounding.
-        if (RecordingService.start(this, originalFile, cleanedFile, timestamp, cleaningPreset)) {
+        stopPlayback()
+        if (RecordingService.start(this, originalFile, cleanedFile, timestamp, recordingPreset.forRecording())) {
             isRecording = true
             Toast.makeText(this, "Recording… speak normally", Toast.LENGTH_SHORT).show()
         } else {
