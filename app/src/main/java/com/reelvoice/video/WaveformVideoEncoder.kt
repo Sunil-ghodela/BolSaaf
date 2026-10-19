@@ -15,6 +15,8 @@ import android.opengl.EGLSurface
 import android.opengl.GLES20
 import android.opengl.GLUtils
 import android.opengl.Matrix
+import android.os.SystemClock
+import android.util.Log
 import android.view.Surface
 import java.io.File
 import java.nio.ByteBuffer
@@ -98,13 +100,37 @@ class WaveformVideoEncoder(
             }
         }
 
-        fun drain(encoder: MediaCodec, isVideo: Boolean, endOfStream: Boolean) {
+        /**
+         * Drains pending output from [encoder]. When [waitForEos] is false this is a single
+         * non-blocking pass. When true it blocks (bounded — see [EOS_WAIT_TIMEOUT_MS]) until the
+         * end-of-stream buffer is seen.
+         *
+         * @return true if the encoder's end-of-stream buffer was observed.
+         */
+        fun drain(encoder: MediaCodec, isVideo: Boolean, waitForEos: Boolean): Boolean {
             val bufInfo = MediaCodec.BufferInfo()
+            var staleRounds = 0
+            val deadline = if (waitForEos) SystemClock.elapsedRealtime() + EOS_WAIT_TIMEOUT_MS else 0L
             while (true) {
-                val idx = encoder.dequeueOutputBuffer(bufInfo, if (endOfStream) 10_000L else 0L)
+                val idx = encoder.dequeueOutputBuffer(bufInfo, if (waitForEos) 10_000L else 0L)
                 when {
                     idx == MediaCodec.INFO_TRY_AGAIN_LATER -> {
-                        if (!endOfStream) return
+                        if (!waitForEos) return false
+                        // Bounded wait for the final EOS buffer. Some encoders (and the
+                        // emulator's software AVC encoder) never deliver it, which used to
+                        // wedge this loop forever and freeze the export dialog at 100%.
+                        staleRounds++
+                        if (staleRounds >= EOS_MAX_STALE_ROUNDS ||
+                            SystemClock.elapsedRealtime() >= deadline
+                        ) {
+                            Log.w(
+                                TAG,
+                                "end-of-stream not delivered by " +
+                                    (if (isVideo) "video" else "audio") +
+                                    " encoder after ${EOS_WAIT_TIMEOUT_MS}ms; finalizing"
+                            )
+                            return false
+                        }
                     }
                     idx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                         if (isVideo) {
@@ -115,6 +141,7 @@ class WaveformVideoEncoder(
                         maybeStartMuxer()
                     }
                     idx >= 0 -> {
+                        staleRounds = 0
                         val out = encoder.getOutputBuffer(idx)
                             ?: throw IllegalStateException("null output buffer at $idx")
                         if ((bufInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
@@ -137,17 +164,18 @@ class WaveformVideoEncoder(
                                 else pendingAudio.add(PendingSample(copy, infoCopy))
                             }
                         }
+                        val sawEos = (bufInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
                         encoder.releaseOutputBuffer(idx, false)
-                        if ((bufInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) return
+                        if (sawEos) return true
                     }
                 }
             }
         }
 
-        fun feedAudio(endOfStream: Boolean) {
-            if (audioCursor >= sampler.samples.size && !endOfStream) return
+        fun feedAudio(endOfStream: Boolean): Boolean {
+            if (audioCursor >= sampler.samples.size && !endOfStream) return true
             val idx = audioEncoder.dequeueInputBuffer(10_000L)
-            if (idx < 0) return
+            if (idx < 0) return false
             val inBuf = audioEncoder.getInputBuffer(idx)!!
             inBuf.clear()
             val capacityShorts = inBuf.capacity() / 2
@@ -168,7 +196,11 @@ class WaveformVideoEncoder(
             val eos = remaining <= capacityShorts
             val flags = if (eos) MediaCodec.BUFFER_FLAG_END_OF_STREAM else 0
             audioEncoder.queueInputBuffer(idx, 0, take * 2, ptsUs, flags)
+            return true
         }
+
+        var videoEosSeen = false
+        var audioEosSeen = false
 
         try {
             videoEncoder.start()
@@ -187,20 +219,34 @@ class WaveformVideoEncoder(
                 egl.setPresentationTime(ptsNs)
                 egl.swapBuffers()
 
-                drain(videoEncoder, isVideo = true, endOfStream = false)
+                if (drain(videoEncoder, isVideo = true, waitForEos = false)) videoEosSeen = true
                 feedAudio(endOfStream = false)
-                drain(audioEncoder, isVideo = false, endOfStream = false)
+                if (drain(audioEncoder, isVideo = false, waitForEos = false)) audioEosSeen = true
 
                 frameIndex++
                 progress?.onProgress(frameIndex.toFloat() / totalFrames)
             }
             videoEncoder.signalEndOfInputStream()
+            var audioStallRounds = 0
             while (audioCursor < sampler.samples.size) {
-                feedAudio(endOfStream = false)
-                drain(audioEncoder, isVideo = false, endOfStream = false)
+                val accepted = feedAudio(endOfStream = false)
+                if (drain(audioEncoder, isVideo = false, waitForEos = false)) audioEosSeen = true
+                // Guard against a wedged audio encoder: without this the loop spins
+                // forever on a full input-buffer queue with no output draining.
+                audioStallRounds = if (accepted) 0 else audioStallRounds + 1
+                if (audioStallRounds >= AUDIO_MAX_STALL_ROUNDS) {
+                    Log.w(
+                        TAG,
+                        "audio encoder stalled with " +
+                            (sampler.samples.size - audioCursor) +
+                            " samples left; finalizing"
+                    )
+                    break
+                }
             }
-            drain(videoEncoder, isVideo = true, endOfStream = true)
-            drain(audioEncoder, isVideo = false, endOfStream = true)
+            // Only block if the end-of-stream buffer hasn't already been drained above.
+            if (!videoEosSeen) videoEosSeen = drain(videoEncoder, isVideo = true, waitForEos = true)
+            if (!audioEosSeen) audioEosSeen = drain(audioEncoder, isVideo = false, waitForEos = true)
             bitmap.recycle()
         } finally {
             try { videoEncoder.stop() } catch (_: Exception) {}
@@ -397,5 +443,15 @@ class WaveformVideoEncoder(
         const val DEFAULT_BAR_COUNT = 60
         private const val MIME_VIDEO = MediaFormat.MIMETYPE_VIDEO_AVC
         private const val MIME_AUDIO = MediaFormat.MIMETYPE_AUDIO_AAC
+        private const val TAG = "WaveformVideoEncoder"
+
+        /** Hard cap on how long we wait for the final end-of-stream buffer. */
+        private const val EOS_WAIT_TIMEOUT_MS = 8_000L
+
+        /** Consecutive empty dequeue rounds before giving up on EOS (~3s at 10ms). */
+        private const val EOS_MAX_STALE_ROUNDS = 300
+
+        /** Consecutive rejected audio-input rounds before giving up (~2s at 10ms). */
+        private const val AUDIO_MAX_STALL_ROUNDS = 200
     }
 }
