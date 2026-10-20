@@ -528,12 +528,12 @@ fun HomeScreen(
                     onGoToHistory = onGoToHistory
                 )
                 
-                Spacer(modifier = Modifier.height(40.dp))
+                Spacer(modifier = Modifier.height(24.dp))
                 
                 // Animated title
                 AnimatedTitle()
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Primary action grid — one glance, one tap.
                 // Collapses the old two-parallel-mode-selector design (cleaning preset row +
@@ -1277,7 +1277,7 @@ fun ActionGrid(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Make Reel — one tap → clean + vibe + loudness",
+                    text = "Make Reel · clean + vibe + loudness",
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
