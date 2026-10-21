@@ -336,6 +336,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // The app uses a light canvas even when the system is in dark mode.
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = true
+            isAppearanceLightNavigationBars = true
+        }
+
         audioProcessor = AudioProcessor(this)
         voiceApi = VoiceCleaningApi()
         voiceApiPhase2 = VoiceApiPhase2Client()

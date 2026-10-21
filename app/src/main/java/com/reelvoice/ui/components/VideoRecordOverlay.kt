@@ -15,6 +15,8 @@ import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import com.reelvoice.ui.theme.BrandRed
+import com.reelvoice.ui.theme.BrandRedLight
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -172,7 +175,7 @@ fun VideoRecordOverlay(
         errorText?.let {
             Text(
                 text = it,
-                color = Color(0xFFFF8A80),
+                color = BrandRedLight,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = 52.dp)
@@ -232,7 +235,7 @@ fun VideoRecordOverlay(
                         modifier = Modifier
                             .size(8.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFE34C52))
+                            .background(BrandRed)
                     )
                     Spacer(modifier = Modifier.size(6.dp))
                     Text(
@@ -305,7 +308,7 @@ private fun RecordButton(
             modifier = Modifier
                 .size(if (isRecording) 32.dp else 56.dp)
                 .clip(if (isRecording) RoundedCornerShape(6.dp) else CircleShape)
-                .background(if (enabled) Color(0xFFE34C52) else Color.Gray)
+                .background(if (enabled) BrandRed else MaterialTheme.colorScheme.outline)
         )
     }
 }

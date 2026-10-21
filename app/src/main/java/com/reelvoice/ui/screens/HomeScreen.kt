@@ -1276,15 +1276,19 @@ fun ActionGrid(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Make Reel · clean + vibe + loudness",
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Make Reel",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "clean + vibe + loudness",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White
+                    )
+                }
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = null,
@@ -1339,13 +1343,14 @@ private fun SecondaryActionCard(
                     modifier = Modifier.size(22.dp)
                 )
             }
+            Spacer(modifier = Modifier.height(12.dp))
             Column {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(2.dp))
