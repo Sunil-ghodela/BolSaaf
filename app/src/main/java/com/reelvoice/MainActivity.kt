@@ -40,6 +40,7 @@ import com.reelvoice.audio.VoiceCleaningException
 import com.reelvoice.audio.AdaptiveAudioAnalyzer
 import com.reelvoice.audio.FeedbackAdaptiveMemory
 import com.reelvoice.audio.ModePreset
+import com.reelvoice.audio.BackgroundCatalog
 import com.reelvoice.audio.pcm16LeToShortArray
 import com.reelvoice.audio.ProcessingQualityGuard
 import com.reelvoice.audio.VoiceBackground
@@ -107,8 +108,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private var serverAvailableModes by mutableStateOf<Set<String>>(emptySet())
-    private var voiceBackgrounds by mutableStateOf<List<VoiceBackground>>(emptyList())
-    private var selectedBackgroundIndex by mutableIntStateOf(0)
+    private var backgroundCatalog by mutableStateOf(BackgroundCatalog())
+    private val voiceBackgrounds: List<VoiceBackground> get() = backgroundCatalog.items
+    private var selectedBackgroundIndex: Int
+        get() = backgroundCatalog.selectedIndex
+        set(value) {
+            backgroundCatalog = backgroundCatalog.select(value)
+            backgroundCatalog.selected?.let { bgMixVolume = it.defaultVolume.coerceIn(0.02f, 0.5f) }
+        }
     private var showVibeSheet by mutableStateOf(false)
     private var showRecordFormatSheet by mutableStateOf(false)
     private var showVideoRecorder by mutableStateOf(false)
@@ -268,16 +275,16 @@ class MainActivity : ComponentActivity() {
     private fun applyModePreset(preset: ModePreset) {
         val preferredIdx = voiceBackgrounds
             .indexOfFirst { it.id.equals(preset.preferredBackgroundId, ignoreCase = true) }
-        val resolvedIdx = if (preferredIdx >= 0) preferredIdx else {
-            preset.fallbackBackgroundIds
-                .firstNotNullOfOrNull { fid ->
-                    voiceBackgrounds.indexOfFirst { it.id.equals(fid, ignoreCase = true) }
-                        .takeIf { it >= 0 }
-                } ?: 0
+        if (preferredIdx < 0) {
+            Toast.makeText(this,
+                if (backgroundCatalog.loading) "Sounds are loading. Please try again in a moment."
+                else "${preset.displayLabel} sound is unavailable. Choose another sound in Add Vibe.",
+                Toast.LENGTH_LONG).show()
+            if (!backgroundCatalog.loading) refreshBackgroundCatalog()
+            return
         }
-        if (voiceBackgrounds.isNotEmpty()) {
-            selectedBackgroundIndex = resolvedIdx.coerceIn(0, voiceBackgrounds.lastIndex)
-        }
+        val resolvedIdx = preferredIdx
+        selectedBackgroundIndex = resolvedIdx
         cleaningPreset = preset.cleaningPreset
         // Prefer the server's calibrated default_volume for the resolved background;
         // fall back to the preset's default if the entry lacks one.
@@ -285,11 +292,7 @@ class MainActivity : ComponentActivity() {
             .coerceIn(0.02f, 0.5f)
         processingFlow = ProcessingFlow.ADD_BACKGROUND
 
-        val msg = if (preferredIdx >= 0) {
-            "${preset.emoji} ${preset.displayLabel} mode ready — pick your voice clip"
-        } else {
-            "${preset.emoji} ${preset.displayLabel} applied — audio coming soon, using ${voiceBackgrounds.getOrNull(resolvedIdx)?.label ?: "default"} for now"
-        }
+        val msg = "${preset.emoji} ${preset.displayLabel} mode ready — pick your voice clip"
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         openUploadPicker()
     }
@@ -401,6 +404,10 @@ class MainActivity : ComponentActivity() {
                 ) {
                 when (selectedTab) {
                     0 -> HomeScreen(
+                        backgrounds = voiceBackgrounds,
+                        backgroundsLoading = backgroundCatalog.loading,
+                        backgroundsError = backgroundCatalog.error,
+                        onRetryBackgrounds = { refreshBackgroundCatalog() },
                         recordingsDir = recDir,
                         recordingPreset = recordingPreset,
                         isRecording = isRecording,
@@ -552,6 +559,10 @@ class MainActivity : ComponentActivity() {
                         onLogout = { handleLogout() }
                     )
                     else -> HomeScreen(
+                        backgrounds = voiceBackgrounds,
+                        backgroundsLoading = backgroundCatalog.loading,
+                        backgroundsError = backgroundCatalog.error,
+                        onRetryBackgrounds = { refreshBackgroundCatalog() },
                         recordingsDir = recDir,
                         recordingPreset = recordingPreset,
                         isRecording = isRecording,
@@ -1751,6 +1762,12 @@ class MainActivity : ComponentActivity() {
         val originalFile = File(outputDir, "uploaded_$timestamp${guessExtensionForUri(uri)}")
         val flowSnapshot = processingFlow
         val bgIdSnapshot = selectedBackgroundId()
+        if ((flowSnapshot == ProcessingFlow.ADD_BACKGROUND || flowSnapshot == ProcessingFlow.REEL_MODE) &&
+            bgIdSnapshot == null) {
+            showCleanButton = true
+            Toast.makeText(this, "Choose an available sound in Add Vibe before processing.", Toast.LENGTH_LONG).show()
+            return
+        }
         val bgVolSnapshot = bgMixVolume.coerceIn(0.02f, 0.5f)
         val outFile = if (flowSnapshot == ProcessingFlow.VIDEO_PROCESS) {
             File(outputDir, "cleaned_$timestamp.mp4")
@@ -1776,7 +1793,7 @@ class MainActivity : ComponentActivity() {
                 val accepted = when (flowSnapshot) {
                     ProcessingFlow.ADD_BACKGROUND -> voiceApiPhase2.addBackground(
                         originalFile,
-                        backgroundId = bgIdSnapshot,
+                        backgroundId = requireNotNull(bgIdSnapshot),
                         bgVolume = bgVolSnapshot,
                         mode = mode
                     )
@@ -1978,30 +1995,31 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun refreshVoiceApiCapabilities() {
+        refreshBackgroundCatalog()
         Thread {
             try {
                 val health = voiceApi.getHealth()
-                val backgrounds = try {
-                    voiceApiPhase2.getBackgrounds()
-                } catch (_: Exception) {
-                    emptyList()
-                }
+                runOnUiThread { if (!isDestroyed) serverAvailableModes = health.availableModes }
+            } catch (_: Exception) { /* Health failure must not hide the sound catalogue. */ }
+        }.start()
+    }
+
+    private fun refreshBackgroundCatalog() {
+        if (backgroundCatalog.loading) return
+        backgroundCatalog = backgroundCatalog.copy(loading = true, error = null)
+        Thread {
+            try {
+                val backgrounds = voiceApiPhase2.getBackgrounds()
                 runOnUiThread {
-                    serverAvailableModes = health.availableModes
-                    voiceBackgrounds = if (backgrounds.isNotEmpty()) {
-                        backgrounds
-                    } else {
-                        listOf(VoiceBackground("rain", "Rain", null, 0.15f))
+                    if (!isDestroyed) {
+                        backgroundCatalog = backgroundCatalog.loaded(backgrounds)
+                        backgroundCatalog.selected?.let {
+                            bgMixVolume = it.defaultVolume.coerceIn(0.02f, 0.5f)
+                        }
                     }
-                    selectedBackgroundIndex =
-                        selectedBackgroundIndex.coerceIn(0, (voiceBackgrounds.size - 1).coerceAtLeast(0))
                 }
             } catch (_: Exception) {
-                runOnUiThread {
-                    if (voiceBackgrounds.isEmpty()) {
-                        voiceBackgrounds = listOf(VoiceBackground("rain", "Rain", null, 0.15f))
-                    }
-                }
+                runOnUiThread { if (!isDestroyed) backgroundCatalog = backgroundCatalog.failed() }
             }
         }.start()
     }
@@ -2014,9 +2032,7 @@ class MainActivity : ComponentActivity() {
             else -> "Start"
         }
 
-    private fun selectedBackgroundId(): String =
-        voiceBackgrounds.getOrNull(selectedBackgroundIndex.coerceIn(0, voiceBackgrounds.lastIndex.coerceAtLeast(0)))
-            ?.id?.takeIf { it.isNotBlank() } ?: "rain"
+    private fun selectedBackgroundId(): String? = backgroundCatalog.selected?.id
 
     private fun processPrimaryButtonLabel(): String =
         when (processingFlow) {

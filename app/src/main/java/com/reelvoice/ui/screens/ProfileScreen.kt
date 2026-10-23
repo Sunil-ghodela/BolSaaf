@@ -35,6 +35,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.reelvoice.audio.AuthApi
 import com.reelvoice.audio.CleaningPreset
+import com.reelvoice.ui.theme.BrandGradient
 import com.reelvoice.ui.animation.MD3Motion
 import com.reelvoice.ui.components.BottomNavBar
 import com.reelvoice.ui.animation.slideInFromBottom
@@ -182,11 +183,7 @@ fun ProfileScreen(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(20.dp))
-                                    .background(
-                                        brush = Brush.horizontalGradient(
-                                            listOf(MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.primary)
-                                        )
-                                    )
+                                    .background(brush = BrandGradient.Brand)
                                     .padding(horizontal = 12.dp, vertical = 6.dp)
                             ) {
                                 Row(
@@ -307,11 +304,7 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .fillMaxWidth(usedFraction.coerceIn(0f, 1f).coerceAtLeast(0.04f))
-                                .background(
-                                    brush = Brush.horizontalGradient(
-                                        listOf(MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.primary)
-                                    )
-                                )
+                                .background(brush = BrandGradient.Brand)
                         )
                     }
 
@@ -328,17 +321,12 @@ fun ProfileScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(
-                                    brush = Brush.horizontalGradient(
-                                        listOf(MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.secondary)
-                                    ),
-                                    shape = RoundedCornerShape(14.dp)
-                                ),
+                                .background(brush = BrandGradient.MakeReel, shape = RoundedCornerShape(14.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = "View plans",
-                                color = Color.Black,
+                                color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.titleSmall
                             )

@@ -70,12 +70,15 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.reelvoice.R
 import com.reelvoice.ui.VibeUi
 import com.reelvoice.ui.theme.AccentCyan
 import com.reelvoice.ui.theme.AccentGreen
@@ -102,6 +105,7 @@ import com.reelvoice.audio.WavPreview
 import com.reelvoice.ui.animation.MD3Motion
 import com.reelvoice.ui.animation.slideInFromStart
 import com.reelvoice.ui.components.BeforeAfterFormatPicker
+import com.reelvoice.ui.components.BackgroundSoundSheet
 import com.reelvoice.ui.components.BottomNavBar
 import com.reelvoice.ui.components.MD3EmptyState
 import com.reelvoice.ui.components.ModePresetStrip
@@ -156,6 +160,10 @@ fun HomeScreen(
     selectedProcessingModeIndex: Int = 0,
     onProcessingModeChange: (Int) -> Unit = {},
     showBackgroundControls: Boolean = false,
+    backgrounds: List<com.reelvoice.audio.VoiceBackground> = emptyList(),
+    backgroundsLoading: Boolean = false,
+    backgroundsError: String? = null,
+    onRetryBackgrounds: () -> Unit = {},
     backgroundLabels: List<String> = emptyList(),
     selectedBackgroundIndex: Int = 0,
     onBackgroundIndexChange: (Int) -> Unit = {},
@@ -845,9 +853,12 @@ fun HomeScreen(
         }
 
         if (showVibeSheet) {
-            VibePickerSheet(
-                vibes = backgroundLabels,
-                selectedIndex = selectedBackgroundIndex.coerceIn(0, backgroundLabels.lastIndex.coerceAtLeast(0)),
+            BackgroundSoundSheet(
+                backgrounds = backgrounds,
+                selectedIndex = selectedBackgroundIndex,
+                loading = backgroundsLoading,
+                error = backgroundsError,
+                onRetry = onRetryBackgrounds,
                 onDismiss = { showVibeSheet = false },
                 onPicked = { idx ->
                     onBackgroundIndexChange(idx)
@@ -1217,6 +1228,54 @@ fun ActionGrid(
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
     ) {
+        // Make Reel is the hero action — pinned above the grid so it is the
+        // first thing a returning user sees, instead of hiding below the cards.
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(CtaOrangeRedGradient)
+                .clickable(onClick = onMakeReel)
+                .semantics { },
+            color = Color.Transparent
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Star,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Make Reel",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "clean + vibe + loudness in one tap",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Send,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         // Primary row — 3 distinct gradient tiles.
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1252,51 +1311,6 @@ fun ActionGrid(
         }
 
         Spacer(modifier = Modifier.height(12.dp))
-
-        // Slim Make Reel banner below the primary cards.
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(CtaOrangeRedGradient)
-                .clickable(onClick = onMakeReel)
-                .semantics { },
-            color = Color.Transparent
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Star,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Make Reel",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "clean + vibe + loudness",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
     }
 }
 
@@ -1390,20 +1404,20 @@ fun GlassmorphicHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // App logo — the real ReelVoice launcher art on the brand gradient.
+                // (Was a generic "+" icon that looked like a broken placeholder.)
                 Surface(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(RoundedCornerShape(12.dp)),
-                    color = MaterialTheme.colorScheme.primary,
+                    color = Color.Transparent,
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(
-                        Icons.Filled.Add,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .padding(8.dp)
+                    Image(
+                        painter = painterResource(R.drawable.ic_launcher_foreground),
+                        contentDescription = "ReelVoice",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
