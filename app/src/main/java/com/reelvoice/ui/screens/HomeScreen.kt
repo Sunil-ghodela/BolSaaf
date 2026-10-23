@@ -29,7 +29,9 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
@@ -86,6 +88,8 @@ import com.reelvoice.ui.theme.AccentPurple
 import com.reelvoice.ui.theme.BackgroundCard
 import com.reelvoice.ui.theme.BrandGradient
 import com.reelvoice.ui.theme.CtaOrangeRedGradient
+import com.reelvoice.ui.theme.MakeReelOrange
+import com.reelvoice.ui.theme.MakeReelRed
 import com.reelvoice.ui.theme.SliderTrack
 import com.reelvoice.ui.theme.SliderTrackStrong
 import com.reelvoice.ui.theme.SurfaceStripe
@@ -527,30 +531,31 @@ fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             item {
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // Header with glassmorphism
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Compact header — brand mark on the left, free-minute chip on the right.
                 GlassmorphicHeader(
                     freeMinutesLeft = freeMinutesLeft,
                     freeQuotaMinutes = freeQuotaMinutes,
                     onGoToHistory = onGoToHistory
                 )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // Animated title
-                AnimatedTitle()
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Primary action grid — one glance, one tap.
-                // Collapses the old two-parallel-mode-selector design (cleaning preset row +
-                // processing mode row + separate MakeReelBanner) into one clear CTA per action.
-                ActionGrid(
-                    onMakeReel = {
+                // Make Reel — hero action pinned directly under the header, so the
+                // highest-value flow is the first thing on screen (it used to sit below
+                // a decorative title and off the first scroll).
+                MakeReelHero(
+                    onClick = {
                         onProcessingModeChange(0)
                         onProminentReelClick()
-                    },
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Secondary actions — three one-tap entries under the hero.
+                ActionGrid(
                     onQuickClean = {
                         onProcessingModeChange(1)
                         onUploadFile()
@@ -1218,7 +1223,6 @@ fun HomeScreen(
 // ---------------------------------------------------------------------------
 @Composable
 fun ActionGrid(
-    onMakeReel: () -> Unit,
     onQuickClean: () -> Unit,
     onAddVibe: () -> Unit,
     onVideoClean: () -> Unit,
@@ -1228,54 +1232,6 @@ fun ActionGrid(
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
     ) {
-        // Make Reel is the hero action — pinned above the grid so it is the
-        // first thing a returning user sees, instead of hiding below the cards.
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(CtaOrangeRedGradient)
-                .clickable(onClick = onMakeReel)
-                .semantics { },
-            color = Color.Transparent
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Star,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Make Reel",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "clean + vibe + loudness in one tap",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
         // Primary row — 3 distinct gradient tiles.
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1907,71 +1863,65 @@ fun ComparisonCard(
 
     val typeLabel = when {
         isVideo -> "VIDEO"
-        pair.isRecording -> "LIVE"
+        pair.isRecording -> "REC"
         else -> "AUDIO"
     }
+    // Accent gradient per media type — gives each card a clear, calm identity
+    // instead of the old washed-out pink/purple wash across the whole card.
+    val accentBrush = when {
+        isVideo -> Brush.linearGradient(listOf(ThemeBlue, ThemeBlueLight))
+        pair.isRecording -> Brush.linearGradient(listOf(MakeReelOrange, MakeReelRed))
+        else -> Brush.linearGradient(listOf(com.reelvoice.ui.theme.BrandPurple, ThemeBlue))
+    }
+    var moreExpanded by remember { mutableStateOf(false) }
+    var headerMenuExpanded by remember { mutableStateOf(false) }
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp, horizontal = 4.dp),
+            .padding(vertical = 6.dp, horizontal = 16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = androidx.compose.ui.graphics.Color.Transparent
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        shape = RoundedCornerShape(16.dp),
-        // Flat card: no drop shadow (the tinted M3 elevation shadow rendered as a
-        // heavy grey frame on device). Separation comes from a hairline border.
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        shape = RoundedCornerShape(18.dp),
+        // Clean flat card — separation comes from a hairline border plus a very
+        // light elevation. The old pink/purple gradient wash looked washed-out
+        // and dated on device.
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isCleanedPlaying) 4.dp else 1.dp
+        ),
         border = androidx.compose.foundation.BorderStroke(
-            width = if (isCleanedPlaying) 1.5.dp else 0.5.dp,
+            width = if (isCleanedPlaying) 1.5.dp else 1.dp,
             color = if (isCleanedPlaying) {
                 MaterialTheme.colorScheme.primary
             } else {
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                MaterialTheme.colorScheme.outlineVariant
             }
         )
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            com.reelvoice.ui.theme.BrandRed.copy(alpha = 0.10f),
-                            com.reelvoice.ui.theme.BrandPurple.copy(alpha = 0.06f),
-                            com.reelvoice.ui.theme.BrandBlue.copy(alpha = 0.10f),
-                            androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f)
-                        ),
-                        start = androidx.compose.ui.geometry.Offset(0f, 0f),
-                        end = androidx.compose.ui.geometry.Offset(1000f, 1400f)
-                    )
-                )
+            modifier = Modifier.fillMaxWidth()
         ) {
-            // Primary row: play button + title + meta + delete
+            // Primary row: type icon + title + meta + overflow menu
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onPlayCleaned() }
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                    .padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Circular play / pause button
+                // Type icon tile on the brand gradient.
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isCleanedPlaying) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.primaryContainer
-                        ),
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(accentBrush),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (isCleanedPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = if (isCleanedPlaying) "Pause" else "Play",
-                        tint = if (isCleanedPlaying) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(24.dp)
+                        imageVector = if (isVideo) Icons.Filled.Movie else Icons.Filled.AutoAwesome,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
@@ -1985,21 +1935,21 @@ fun ComparisonCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer,
+                            color = SurfaceStripe
                         ) {
                             Text(
                                 text = typeLabel,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                color = TextSecondary,
                                 fontSize = 9.sp,
                                 letterSpacing = 0.6.sp
                             )
@@ -2019,28 +1969,70 @@ fun ComparisonCard(
                     }
                 }
 
-                // Delete
-                IconButton(
-                    onClick = onRemove,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
+                // Overflow menu — file-level actions (save, feedback, delete).
+                Box {
+                    IconButton(
+                        onClick = { headerMenuExpanded = true },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.MoreVert,
+                            contentDescription = "More options",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = headerMenuExpanded,
+                        onDismissRequest = { headerMenuExpanded = false }
+                    ) {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Save to Downloads") },
+                            leadingIcon = {
+                                Icon(Icons.Filled.Download, contentDescription = null)
+                            },
+                            onClick = {
+                                headerMenuExpanded = false
+                                onDownload()
+                            }
+                        )
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Feedback") },
+                            leadingIcon = {
+                                Icon(Icons.Filled.ThumbUp, contentDescription = null)
+                            },
+                            onClick = {
+                                headerMenuExpanded = false
+                                onFeedback()
+                            }
+                        )
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            onClick = {
+                                headerMenuExpanded = false
+                                onRemove()
+                            }
+                        )
+                    }
                 }
             }
 
-            // Video thumbnail (compact, only for video)
+            // Media body — soft inset panel so the waveform reads as content,
+            // not a decoration sitting on top of the card.
             if (isVideo) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp)
+                        .padding(horizontal = 14.dp)
                         .aspectRatio(16f / 9f)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .clickable { onPlayCleaned() },
                     contentAlignment = Alignment.Center
@@ -2073,43 +2065,64 @@ fun ComparisonCard(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(6.dp))
             } else {
-                // Compact full-width waveform; if an original exists, a small
-                // "Play original" chip sits below so the A/B compare stays
-                // discoverable without eating a slot in the main action row.
-                Column(
-                    modifier = Modifier.padding(
-                        start = 16.dp,
-                        end = 16.dp,
-                        bottom = 8.dp
-                    )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { onPlayCleaned() }
+                        .padding(horizontal = 10.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    MiniWaveformStrip(cleanedPath, modifier = Modifier.fillMaxWidth())
-                    if (pair.originalFile != pair.cleanedFile) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { onPlayOriginal() }
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = if (isOriginalPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                contentDescription = if (isOriginalPlaying) "Stop original" else "Play original",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (isOriginalPlaying) "Stop original" else "Compare with original",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp
-                            )
-                        }
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isCleanedPlaying) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surface
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isCleanedPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = if (isCleanedPlaying) "Pause" else "Play",
+                            tint = if (isCleanedPlaying) MaterialTheme.colorScheme.onPrimary
+                            else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
+                    Box(modifier = Modifier.weight(1f)) {
+                        MiniWaveformStrip(cleanedPath, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+
+            // Compare-with-original chip (audio only, when a source exists).
+            if (!isVideo && pair.originalFile != pair.cleanedFile) {
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onPlayOriginal() }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isOriginalPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (isOriginalPlaying) "Stop original" else "Play original",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isOriginalPlaying) "Stop original" else "Compare with original",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
@@ -2119,10 +2132,8 @@ fun ComparisonCard(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             )
 
-            // Compact action grid — fixed slots, SpaceBetween so layout is even
-            // on both audio (6 actions) and video (3 actions) cards. Secondary
-            // utilities (Save, Feedback) live under a "More" overflow menu.
-            var moreExpanded by remember { mutableStateOf(false) }
+            // Action row — fixed slots, SpaceBetween so the layout stays even on
+            // both audio and video cards.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2175,16 +2186,6 @@ fun ComparisonCard(
                         expanded = moreExpanded,
                         onDismissRequest = { moreExpanded = false }
                     ) {
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("Save to Downloads") },
-                            leadingIcon = {
-                                Icon(Icons.Filled.Download, contentDescription = null)
-                            },
-                            onClick = {
-                                moreExpanded = false
-                                onDownload()
-                            }
-                        )
                         if (!isVideo) {
                             androidx.compose.material3.DropdownMenuItem(
                                 text = { Text("Trim fillers (beta)") },
@@ -2197,16 +2198,6 @@ fun ComparisonCard(
                                 }
                             )
                         }
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("Feedback") },
-                            leadingIcon = {
-                                Icon(Icons.Filled.ThumbUp, contentDescription = null)
-                            },
-                            onClick = {
-                                moreExpanded = false
-                                onFeedback()
-                            }
-                        )
                     }
                 }
             }
@@ -3255,69 +3246,97 @@ fun ProcessingDialog(
 }
 
 @Composable
-fun MakeReelBanner(
+fun MakeReelHero(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    Surface(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .height(64.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick),
+        color = Color.Transparent,
+        shadowElevation = 3.dp
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(BrandGradient.MakeReel),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .background(CtaOrangeRedGradient)
         ) {
+            // Soft diagonal highlight for depth.
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.18f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Sparkle icon
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .background(Color.White.copy(alpha = 0.2f), CircleShape),
+                        .size(46.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.22f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("✨", style = MaterialTheme.typography.titleMedium)
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
-
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Make Reel — recommended",
+                        text = "Make Reel",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "Reel ready in 1 tap",
+                        text = "Clean voice + add vibe + loudness in one tap",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.85f)
+                        color = Color.White.copy(alpha = 0.92f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-
-                // Arrow indicator
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .background(Color.White.copy(alpha = 0.15f), CircleShape),
-                    contentAlignment = Alignment.Center
+                Spacer(modifier = Modifier.width(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(22.dp),
+                    color = Color.White
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Start",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MakeReelRed
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = null,
+                            tint = MakeReelRed,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
         }
