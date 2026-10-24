@@ -536,31 +536,16 @@ fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             item {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
-                // Slim free-minute banner — sits on its own above the brand header
-                // so the header stays clean (name + tagline only).
-                QuotaBanner(
+                // Single slim top bar: app logo on the left (no name text),
+                // free-minute chip on the right. Nothing else up top.
+                TopBrandBar(
                     freeMinutesLeft = freeMinutesLeft,
                     freeQuotaMinutes = freeQuotaMinutes
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
-
-                // Compact header — brand mark on the left only.
-                GlassmorphicHeader(
-                    onGoToHistory = onGoToHistory
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Retention hook — one-tap demo on a bundled noisy sample.
-                // Lets a brand-new user hear the cleaning magic without recording
-                // anything (no mic permission, no effort).
-                if (!isCleaning && !isUploading && !isRecording) {
-                    TrySampleCard(onClick = onTrySample)
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
 
                 // Make Reel — hero action pinned directly under the header, so the
                 // highest-value flow is the first thing on screen (it used to sit below
@@ -595,7 +580,11 @@ fun HomeScreen(
                     }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // Retention hook — one-tap demo on a bundled noisy sample.
+                if (!isCleaning && !isUploading && !isRecording) {
+                    TrySampleCard(onClick = onTrySample)
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
                 ModePresetStrip(onPick = onPickModePreset)
 
                 if (!modeAvailabilityNote.isNullOrBlank()) {
@@ -1356,70 +1345,12 @@ private fun SecondaryActionCard(
     }
 }
 
-@Composable
-fun GlassmorphicHeader(
-    onGoToHistory: () -> Unit
-) {
-    ElevatedCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // App logo — the real ReelVoice launcher art on the brand gradient.
-                // (Was a generic "+" icon that looked like a broken placeholder.)
-                Surface(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    color = Color.Transparent,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_launcher_foreground),
-                        contentDescription = "ReelVoice",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        "ReelVoice",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Text(
-                        "Audio & Video Studio",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-        }
-    }
-}
-
 /**
- * Slim free-minute banner — a small standalone strip shown near the top of the
- * home screen, above the brand header. Keeps the header itself uncluttered.
+ * Single slim top bar: app logo on the left (no name text), free-minute chip
+ * on the right. Replaces the old stacked banner + header cards.
  */
 @Composable
-fun QuotaBanner(
+fun TopBrandBar(
     freeMinutesLeft: Int,
     freeQuotaMinutes: Int = 20
 ) {
@@ -1427,56 +1358,69 @@ fun QuotaBanner(
     val leftFrac = (freeMinutesLeft.coerceAtLeast(0) / safeQuota.toFloat())
         .coerceIn(0f, 1f)
     val isLow = freeMinutesLeft <= 3
-    val bannerBg = if (isLow) {
+    val chipBg = if (isLow) {
         MaterialTheme.colorScheme.errorContainer
     } else {
         MaterialTheme.colorScheme.primaryContainer
     }
-    val bannerAccent = if (isLow) {
+    val chipAccent = if (isLow) {
         MaterialTheme.colorScheme.error
     } else {
         MaterialTheme.colorScheme.primary
     }
-    val bannerText = if (isLow) {
+    val chipText = if (isLow) {
         MaterialTheme.colorScheme.onErrorContainer
     } else {
         MaterialTheme.colorScheme.onPrimaryContainer
     }
-    Surface(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp),
-        color = bannerBg,
-        shape = RoundedCornerShape(20.dp)
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
+        // App logo only — no name text.
+        Surface(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp)),
+            color = Color.Transparent,
+            shape = RoundedCornerShape(10.dp)
         ) {
-            Icon(
-                imageVector = Icons.Filled.Star,
-                contentDescription = null,
-                tint = bannerAccent,
-                modifier = Modifier.size(14.dp)
+            Image(
+                painter = painterResource(R.mipmap.ic_launcher_foreground),
+                contentDescription = "ReelVoice",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
             )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                "$freeMinutesLeft / $freeQuotaMinutes min free left",
-                style = MaterialTheme.typography.labelSmall,
-                color = bannerText,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            LinearProgressIndicator(
-                progress = { leftFrac },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(4.dp),
-                color = bannerAccent,
-                trackColor = bannerAccent.copy(alpha = 0.22f)
-            )
+        }
+        // Free-minute chip.
+        Surface(color = chipBg, shape = RoundedCornerShape(20.dp)) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier.size(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        progress = leftFrac,
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = chipAccent,
+                        trackColor = chipAccent.copy(alpha = 0.22f)
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    "$freeMinutesLeft / $freeQuotaMinutes min",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = chipText,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
     }
 }
@@ -1511,13 +1455,13 @@ fun TrySampleCard(onClick: () -> Unit) {
             Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Sample pe try karo — 1 tap",
+                    "Try it on a sample — 1 tap",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    "Noisy clip, cleaned suno — mic ki zaroorat nahi",
+                    "Hear a noisy clip cleaned — no mic needed",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1866,7 +1810,7 @@ fun SuccessCleanBanner(info: SaveInfo) {
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
-                    if (info.isSampleDemo) "Demo cleaned — ab apni awaaz try karo! 🎤"
+                    if (info.isSampleDemo) "Demo cleaned — now try your own voice! 🎤"
                     else "Cleaned & saved ✨",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
@@ -1874,7 +1818,7 @@ fun SuccessCleanBanner(info: SaveInfo) {
                 )
                 info.qualityGainPct?.let { gain ->
                     Text(
-                        "Aapki awaaz $gain% zyada saaf hai ✨",
+                        "Your voice is $gain% cleaner ✨",
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
                         color = AccentGreen
