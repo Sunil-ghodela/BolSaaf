@@ -137,7 +137,11 @@ import com.reelvoice.video.WaveformWindowSampler
 data class SaveInfo(
     val cleanedFileName: String,
     val durationSec: Float,
-    val timestamp: String
+    val timestamp: String,
+    /** Measured noise-floor reduction in percent (0–95), or null when not computable. */
+    val qualityGainPct: Int? = null,
+    /** True when this save came from the one-tap sample demo ("Try sample"). */
+    val isSampleDemo: Boolean = false
 )
 
 @Composable
@@ -162,6 +166,7 @@ fun HomeScreen(
         "Video"
     ),
     selectedProcessingModeIndex: Int = 0,
+    onTrySample: () -> Unit = {},
     onProcessingModeChange: (Int) -> Unit = {},
     showBackgroundControls: Boolean = false,
     backgrounds: List<com.reelvoice.audio.VoiceBackground> = emptyList(),
@@ -548,6 +553,14 @@ fun HomeScreen(
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
+
+                // Retention hook — one-tap demo on a bundled noisy sample.
+                // Lets a brand-new user hear the cleaning magic without recording
+                // anything (no mic permission, no effort).
+                if (!isCleaning && !isUploading && !isRecording) {
+                    TrySampleCard(onClick = onTrySample)
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
 
                 // Make Reel — hero action pinned directly under the header, so the
                 // highest-value flow is the first thing on screen (it used to sit below
@@ -1468,6 +1481,57 @@ fun QuotaBanner(
     }
 }
 
+/**
+ * One-tap sample demo card — plays the retention hook. Tapping runs the
+ * cleaning pipeline on a bundled noisy sample so the user hears before/after
+ * without recording anything.
+ */
+@Composable
+fun TrySampleCard(onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "🎧",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Sample pe try karo — 1 tap",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    "Noisy clip, cleaned suno — mic ki zaroorat nahi",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = "Run sample demo",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
+
 @Composable
 fun AnimatedTitle() {
     Column(
@@ -1802,11 +1866,20 @@ fun SuccessCleanBanner(info: SaveInfo) {
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
-                    "Cleaned & saved",
+                    if (info.isSampleDemo) "Demo cleaned — ab apni awaaz try karo! 🎤"
+                    else "Cleaned & saved ✨",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
+                info.qualityGainPct?.let { gain ->
+                    Text(
+                        "Aapki awaaz $gain% zyada saaf hai ✨",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = AccentGreen
+                    )
+                }
                 Text(
                     info.cleanedFileName,
                     style = MaterialTheme.typography.bodySmall,

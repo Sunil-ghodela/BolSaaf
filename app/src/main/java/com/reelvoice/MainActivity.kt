@@ -97,6 +97,8 @@ class MainActivity : ComponentActivity() {
     private var currentProcessedPair: AudioPair? = null
     private var showSuccess by mutableStateOf(false)
     private var lastSaveInfo by mutableStateOf<SaveInfo?>(null)
+    /** True while the one-tap bundled-sample demo is running (retention hook). */
+    private var sampleDemoRunning = false
     private var cleaningPreset by mutableStateOf(CleaningPreset.NORMAL)
     // Microphone recording is independent of cloud/adaptive upload settings.
     private var recordingPreset by mutableStateOf(CleaningPreset.STRONG)
@@ -483,7 +485,8 @@ class MainActivity : ComponentActivity() {
                         reelVariantFiles = latestReelVariantFiles,
                         onPlayReelVariant = { fileName -> playAudioFile(fileName) },
                         onShareReelVariant = { fileName -> shareFile(fileName) },
-                        onDownloadReelVariant = { fileName -> downloadFile(fileName) }
+                        onDownloadReelVariant = { fileName -> downloadFile(fileName) },
+                        onTrySample = { trySampleDemo() }
                     )
                     1 -> LiveScreen(
                         isRecording = isRecording,
@@ -633,7 +636,8 @@ class MainActivity : ComponentActivity() {
                         reelVariantFiles = latestReelVariantFiles,
                         onPlayReelVariant = { fileName -> playAudioFile(fileName) },
                         onShareReelVariant = { fileName -> shareFile(fileName) },
-                        onDownloadReelVariant = { fileName -> downloadFile(fileName) }
+                        onDownloadReelVariant = { fileName -> downloadFile(fileName) },
+                        onTrySample = { trySampleDemo() }
                     )
                 }
                 }
@@ -1150,7 +1154,12 @@ class MainActivity : ComponentActivity() {
         val cleanFile = cleanFile ?: return
         val durationSec = wavDurationSec(cleanFile)
         showSuccess = true
-        lastSaveInfo = SaveInfo(cleanFile.name, durationSec, timestamp)
+        lastSaveInfo = SaveInfo(
+            cleanFile.name,
+            durationSec,
+            timestamp,
+            qualityGainPct = origFile?.let { orig -> try { computeCleanGainPct(orig, cleanFile) } catch (e: Exception) { null } }
+        )
         addAudioPair(timestamp, origFile ?: cleanFile, cleanFile, isRecording = true)
         Toast.makeText(this, "Saved · ${"%.1f".format(durationSec)}s · ${cleanFile.name}", Toast.LENGTH_LONG).show()
         window.decorView.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
@@ -1396,7 +1405,15 @@ class MainActivity : ComponentActivity() {
                     isUploading = false
                     if (success) {
                         showSuccess = true
-                        lastSaveInfo = SaveInfo(cleanedFile.name, wavDurationSec(cleanedFile), timestamp)
+                        val gainPct = try { computeCleanGainPct(originalFile, cleanedFile) } catch (e: Exception) { null }
+                        lastSaveInfo = SaveInfo(
+                            cleanedFile.name,
+                            wavDurationSec(cleanedFile),
+                            timestamp,
+                            qualityGainPct = gainPct,
+                            isSampleDemo = sampleDemoRunning
+                        )
+                        sampleDemoRunning = false
                         addAudioPair(timestamp, originalFile, cleanedFile, isRecording = false)
                         Toast.makeText(this, "Cleaned · ${cleanedFile.name}", Toast.LENGTH_LONG).show()
                         Thread {
@@ -1456,6 +1473,70 @@ class MainActivity : ComponentActivity() {
         val pcmBytes = wav.length() - 44
         if (pcmBytes <= 0) return 0f
         return (pcmBytes / 2) / 48000f
+    }
+
+    /**
+     * Retention hook: one-tap demo — copies the bundled noisy sample from assets
+     * to cache and runs the regular cleaning pipeline on it. No mic, no picker,
+     * no confirmation dialog. The success banner then shows the measured gain.
+     */
+    private fun trySampleDemo() {
+        if (isCleaning || isUploading || isRecording) return
+        try {
+            val outFile = File(cacheDir, "sample_demo_noisy_voice.wav")
+            if (!outFile.exists() || outFile.length() < 1000L) {
+                assets.open("sample_noisy_voice.wav").use { input ->
+                    java.io.FileOutputStream(outFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+            sampleDemoRunning = true
+            processingFlow = ProcessingFlow.CLEAN
+            processAudioFile(android.net.Uri.fromFile(outFile))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            sampleDemoRunning = false
+            Toast.makeText(this, "Demo load failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Estimate noise-floor reduction between the original and cleaned WAV.
+     * Frame-RMS at 50 Hz windows; the 20th percentile frame is taken as the
+     * noise floor of each file. Returns noise power removed as 0–95 percent,
+     * or null when the measurement is unreliable (gain <= 1 dB).
+     */
+    private fun computeCleanGainPct(original: File, cleaned: File): Int? {
+        fun frameFloorDb(f: File): Float? {
+            val bytes = f.readBytes()
+            if (bytes.size <= 44) return null
+            val n = (bytes.size - 44) / 2
+            if (n < 48000) return null
+            val frameLen = 48000 / 50
+            val rmsDb = ArrayList<Float>(n / frameLen + 1)
+            var i = 44
+            while (i + frameLen * 2 <= bytes.size) {
+                var sumSq = 0.0
+                for (j in 0 until frameLen) {
+                    val lo = bytes[i + j * 2].toInt() and 0xFF
+                    val hi = bytes[i + j * 2 + 1].toInt()
+                    val v = (hi shl 8) or lo
+                    sumSq += (v * v).toDouble()
+                }
+                val rms = kotlin.math.sqrt(sumSq / frameLen)
+                rmsDb.add(if (rms > 1e-6) 20f * kotlin.math.log10(rms.toFloat()) else -120f)
+                i += frameLen * 2
+            }
+            if (rmsDb.size < 10) return null
+            rmsDb.sort()
+            return rmsDb[(rmsDb.size * 0.2f).toInt().coerceIn(0, rmsDb.size - 1)]
+        }
+        val before = frameFloorDb(original) ?: return null
+        val after = frameFloorDb(cleaned) ?: return null
+        val gainDb = before - after
+        if (gainDb < 1f || gainDb > 30f) return null
+        return ((1.0 - Math.pow(10.0, -gainDb / 10.0)) * 100).toInt().coerceIn(5, 95)
     }
 
     private fun mediaDurationSec(file: File): Float {
