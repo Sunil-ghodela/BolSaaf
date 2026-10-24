@@ -99,6 +99,29 @@ class MainActivity : ComponentActivity() {
     private var lastSaveInfo by mutableStateOf<SaveInfo?>(null)
     /** True while the one-tap bundled-sample demo is running (retention hook). */
     private var sampleDemoRunning = false
+
+    /** True while the activity is resumed — gates the "audio ready" notification. */
+    private var isInForeground = true
+
+    override fun onStart() {
+        super.onStart()
+        isInForeground = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        isInForeground = false
+    }
+
+    /** Android 13+ requires POST_NOTIFICATIONS at runtime; ask once up front. */
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissionLauncher.launch(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS))
+        }
+    }
     private var cleaningPreset by mutableStateOf(CleaningPreset.NORMAL)
     // Microphone recording is independent of cloud/adaptive upload settings.
     private var recordingPreset by mutableStateOf(CleaningPreset.STRONG)
@@ -350,6 +373,11 @@ class MainActivity : ComponentActivity() {
         audioProcessor = AudioProcessor(this)
         voiceApi = VoiceCleaningApi()
         voiceApiPhase2 = VoiceApiPhase2Client()
+
+        // Retention notifications (Phase 2): channels + weekly quota reminder.
+        com.reelvoice.notifications.RetentionNotifications.ensureChannels(this)
+        com.reelvoice.notifications.RetentionNotifications.scheduleWeeklyQuotaReminder(this)
+        requestNotificationPermissionIfNeeded()
         freeMinutesLeft = loadFreeMinutes()
         restoreHistory()
         restoreAuthSession()
@@ -1160,6 +1188,10 @@ class MainActivity : ComponentActivity() {
             timestamp,
             qualityGainPct = origFile?.let { orig -> try { computeCleanGainPct(orig, cleanFile) } catch (e: Exception) { null } }
         )
+        com.reelvoice.notifications.RetentionNotifications.scheduleDay1Nudge(this)
+        if (!isInForeground) {
+            com.reelvoice.notifications.RetentionNotifications.showAudioReady(this, cleanFile.name)
+        }
         addAudioPair(timestamp, origFile ?: cleanFile, cleanFile, isRecording = true)
         Toast.makeText(this, "Saved · ${"%.1f".format(durationSec)}s · ${cleanFile.name}", Toast.LENGTH_LONG).show()
         window.decorView.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
@@ -1415,6 +1447,12 @@ class MainActivity : ComponentActivity() {
                         )
                         sampleDemoRunning = false
                         addAudioPair(timestamp, originalFile, cleanedFile, isRecording = false)
+                        // Retention: first-clean Day-1 nudge (de-dupes itself) and
+                        // background "audio ready" delivery.
+                        com.reelvoice.notifications.RetentionNotifications.scheduleDay1Nudge(this@MainActivity)
+                        if (!isInForeground) {
+                            com.reelvoice.notifications.RetentionNotifications.showAudioReady(this@MainActivity, cleanedFile.name)
+                        }
                         Toast.makeText(this, "Cleaned · ${cleanedFile.name}", Toast.LENGTH_LONG).show()
                         Thread {
                             Thread.sleep(2800)
