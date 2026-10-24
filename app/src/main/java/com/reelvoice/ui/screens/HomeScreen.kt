@@ -531,12 +531,19 @@ fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             item {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                // Compact header — brand mark on the left, free-minute chip on the right.
-                GlassmorphicHeader(
+                // Slim free-minute banner — sits on its own above the brand header
+                // so the header stays clean (name + tagline only).
+                QuotaBanner(
                     freeMinutesLeft = freeMinutesLeft,
-                    freeQuotaMinutes = freeQuotaMinutes,
+                    freeQuotaMinutes = freeQuotaMinutes
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Compact header — brand mark on the left only.
+                GlassmorphicHeader(
                     onGoToHistory = onGoToHistory
                 )
 
@@ -1338,8 +1345,6 @@ private fun SecondaryActionCard(
 
 @Composable
 fun GlassmorphicHeader(
-    freeMinutesLeft: Int,
-    freeQuotaMinutes: Int = 20,
     onGoToHistory: () -> Unit
 ) {
     ElevatedCard(
@@ -1392,56 +1397,73 @@ fun GlassmorphicHeader(
                 }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val safeQuota = freeQuotaMinutes.coerceAtLeast(1)
-                val leftFrac = (freeMinutesLeft.coerceAtLeast(0) / safeQuota.toFloat())
-                    .coerceIn(0f, 1f)
-                val isLow = freeMinutesLeft <= 3
-                val chipBg = if (isLow) {
-                    MaterialTheme.colorScheme.errorContainer
-                } else {
-                    MaterialTheme.colorScheme.primaryContainer
-                }
-                val chipAccent = if (isLow) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.primary
-                }
-                val chipText = if (isLow) {
-                    MaterialTheme.colorScheme.onErrorContainer
-                } else {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                }
-                Surface(
-                    color = chipBg,
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier.size(18.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                progress = leftFrac,
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.5.dp,
-                                color = chipAccent,
-                                trackColor = chipAccent.copy(alpha = 0.22f)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            "$freeMinutesLeft / $freeQuotaMinutes min",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = chipText,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
+        }
+    }
+}
+
+/**
+ * Slim free-minute banner — a small standalone strip shown near the top of the
+ * home screen, above the brand header. Keeps the header itself uncluttered.
+ */
+@Composable
+fun QuotaBanner(
+    freeMinutesLeft: Int,
+    freeQuotaMinutes: Int = 20
+) {
+    val safeQuota = freeQuotaMinutes.coerceAtLeast(1)
+    val leftFrac = (freeMinutesLeft.coerceAtLeast(0) / safeQuota.toFloat())
+        .coerceIn(0f, 1f)
+    val isLow = freeMinutesLeft <= 3
+    val bannerBg = if (isLow) {
+        MaterialTheme.colorScheme.errorContainer
+    } else {
+        MaterialTheme.colorScheme.primaryContainer
+    }
+    val bannerAccent = if (isLow) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
+    val bannerText = if (isLow) {
+        MaterialTheme.colorScheme.onErrorContainer
+    } else {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    }
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        color = bannerBg,
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Star,
+                contentDescription = null,
+                tint = bannerAccent,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                "$freeMinutesLeft / $freeQuotaMinutes min free left",
+                style = MaterialTheme.typography.labelSmall,
+                color = bannerText,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            LinearProgressIndicator(
+                progress = { leftFrac },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(4.dp),
+                color = bannerAccent,
+                trackColor = bannerAccent.copy(alpha = 0.22f)
+            )
         }
     }
 }

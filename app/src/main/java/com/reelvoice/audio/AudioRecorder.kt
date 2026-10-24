@@ -57,6 +57,9 @@ class AudioRecorder(private val context: Context) {
 
     fun startRecording(originalFile: File, cleanedFile: File): Boolean {
         if (isRecording) return false
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.RECORD_AUDIO
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED) return false
 
         // Prefer raw mic without OEM AEC/NS so RNNoise has real noise to remove.
         val sources = buildList {

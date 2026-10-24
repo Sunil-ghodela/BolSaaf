@@ -1,7 +1,6 @@
 package com.reelvoice.ui.components
 
 import android.Manifest
-import android.content.pm.PackageManager
 import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.camera.core.CameraSelector
@@ -81,7 +80,7 @@ fun VideoRecordOverlay(
 
     val hasCameraPermission = remember {
         PermissionChecker.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-            PackageManager.PERMISSION_GRANTED
+            PermissionChecker.PERMISSION_GRANTED
     }
 
     var lensFacing by remember { mutableStateOf(CameraSelector.LENS_FACING_BACK) }
@@ -260,7 +259,7 @@ fun VideoRecordOverlay(
                         val executor: Executor = ContextCompat.getMainExecutor(context)
                         val audioGranted = PermissionChecker.checkSelfPermission(
                             context, Manifest.permission.RECORD_AUDIO
-                        ) == PackageManager.PERMISSION_GRANTED
+                        ) == PermissionChecker.PERMISSION_GRANTED
                         val pending = capture.output.prepareRecording(context, options)
                         if (audioGranted) pending.withAudioEnabled()
                         recording = pending.start(executor) { event ->

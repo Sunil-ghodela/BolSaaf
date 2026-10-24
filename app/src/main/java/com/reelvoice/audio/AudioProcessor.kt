@@ -181,11 +181,10 @@ class AudioProcessor(private val context: Context) {
     private data class WavPcm(val samples: ShortArray, val sampleRate: Int, val channels: Int)
 
     private fun tryReadWavPcm(uri: Uri): WavPcm? {
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+        val bytes = context.contentResolver.openInputStream(uri)?.use {
+            BoundedWavInput.read(it)
+        } ?: return null
         if (bytes.size < 44) return null
-        if (bytes[0] != 'R'.code.toByte() || bytes[1] != 'I'.code.toByte() ||
-            bytes[2] != 'F'.code.toByte() || bytes[3] != 'F'.code.toByte()
-        ) return null
 
         var offset = 12
         var audioFormat = 0
@@ -199,9 +198,11 @@ class AudioProcessor(private val context: Context) {
             val chunkId = String(bytes, offset, 4, Charsets.US_ASCII)
             val chunkSize = ByteBuffer.wrap(bytes, offset + 4, 4).order(ByteOrder.LITTLE_ENDIAN).int
             val dataOffset = offset + 8
+            // Unsigned RIFF sizes above Int.MAX_VALUE, truncation, and overflow are invalid.
+            if (chunkSize < 0 || chunkSize > bytes.size - dataOffset) return null
             when (chunkId) {
                 "fmt " -> {
-                    if (dataOffset + chunkSize > bytes.size) return null
+                    if (chunkSize < 16) return null
                     val fmt = ByteBuffer.wrap(bytes, dataOffset, chunkSize).order(ByteOrder.LITTLE_ENDIAN)
                     audioFormat = fmt.short.toInt() and 0xffff
                     numChannels = fmt.short.toInt() and 0xffff
@@ -218,7 +219,7 @@ class AudioProcessor(private val context: Context) {
             }
             offset = dataOffset + chunkSize + (chunkSize and 1)
         }
-        if (dataStart < 0 || dataSize <= 0 || numChannels < 1) return null
+        if (dataStart < 0 || dataSize <= 0 || numChannels < 1 || sampleRate <= 0) return null
         if (audioFormat != 1) return null // PCM only for direct path; else fall through to MediaCodec
 
         val samples: ShortArray = when (bitsPerSample) {
