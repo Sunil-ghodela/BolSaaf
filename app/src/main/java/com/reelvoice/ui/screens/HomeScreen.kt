@@ -1380,19 +1380,27 @@ fun TopBrandBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Brand logo (app-icon look: gradient tile + white glyph) + wordmark.
+        // Brand logo — the same mic mark shown in the app icon (purple mic on a
+        // light tile), plus the wordmark. NOTE: use the raster foreground PNG,
+        // not R.mipmap.ic_launcher — on API 26+ that resolves to the adaptive-icon
+        // XML, which Compose's painterResource cannot load (it crashes).
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(BrandGradient.BrandLinear),
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(Color.White),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
                     painter = painterResource(R.mipmap.ic_launcher_foreground),
                     contentDescription = "ReelVoice",
-                    modifier = Modifier.fillMaxSize(),
+                    // The foreground PNG is mostly adaptive-icon padding (content is
+                    // only ~43% of the frame), so scale it up to fill the tile like
+                    // the real launcher icon.
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .scale(2.0f),
                     contentScale = ContentScale.Fit
                 )
             }
