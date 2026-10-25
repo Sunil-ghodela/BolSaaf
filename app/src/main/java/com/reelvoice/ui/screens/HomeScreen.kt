@@ -1380,19 +1380,28 @@ fun TopBrandBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // App logo only — no name text.
-        Surface(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(10.dp)),
-            color = Color.Transparent,
-            shape = RoundedCornerShape(10.dp)
-        ) {
-            Image(
-                painter = painterResource(R.mipmap.ic_launcher_foreground),
-                contentDescription = "ReelVoice",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
+        // Brand logo (app-icon look: gradient tile + white glyph) + wordmark.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(BrandGradient.BrandLinear),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(R.mipmap.ic_launcher_foreground),
+                    contentDescription = "ReelVoice",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "ReelVoice",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
         // Free-minute chip.
